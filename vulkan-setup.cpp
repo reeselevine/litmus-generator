@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdexcept>
 #include <cmath>
+#include <stdio.h>
 
 const int N = 1024; // Number of elements in our vector addition
 
@@ -88,7 +89,7 @@ private:
     VkBuffer bufferC;
     VkDeviceMemory bufferMemory;
 
-    std::array<VkBuffer*, 3> buffers = {&bufferA, &bufferB, &bufferC};
+    VkBuffer buffers[3] = {bufferA, bufferB, bufferC};
         
     uint32_t bufferSize; // size of `buffer` in bytes.
 
@@ -123,7 +124,7 @@ public:
         createInstance();
         findPhysicalDevice();
         createDevice();
-        createBuffer();
+        createBuffers();
         createDescriptorSetLayout();
         createDescriptorSet();
         createComputePipeline();
@@ -132,10 +133,7 @@ public:
 
         // Finally, run the recorded command buffer.
         runCommandBuffer();
-
-        // The former command rendered a mandelbrot set to a buffer.
-        // Save that buffer as a png on disk.
-        saveRenderedImage();
+        checkResult();
 
         // Clean up all vulkan resources.
         cleanup();
@@ -143,30 +141,29 @@ public:
 
     void initializeVectors() {
         int32_t *aData = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void *)&aData));
-        int32_t *bData = data + N;
-        int32_t *cData = data + 2*N;
-        for (int i = 0; i < N; i++) {
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&aData));
+        int32_t *bData = aData + N;
+        int32_t *cData = aData + 2*N;
+        for (int32_t i = 0; i < N; i++) {
             aData[i] = i;
             bData[i] = -i;
             cData[i] = 42;
         }
-        VK_CHECK_RESULT(vkUnmapMemory(device, bufferMemory));
+        vkUnmapMemory(device, bufferMemory);
     }
 
-    //TODO: modify this function to print the output array.
     void checkResult() {
         int32_t* aData = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void *)&aData));
-        int32_t *bData = data + N;
-        int32_t *cData = data + 2*N;
-        for (int i = 0; i < N; i++) {
-            if (cData[index] != aData[index] + bData[index]) {
-                fprintf(stderr, "result[%u] is '%d' not '%d'!\n", index,
-                        cData[index], aData[index] + bData[index]);
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&aData));
+        int32_t *bData = aData + N;
+        int32_t *cData = aData + 2*N;
+        for (int32_t i = 0; i < N; i++) {
+            if (cData[i] != aData[i] + bData[i]) {
+		int32_t result = aData[i] + bData[i];
+		fprintf(stderr, "result is wrong!\n");
             }
         }
-        VK_CHECK_RESULT(vkUnmapMemory(device, bufferMemory));
+        vkUnmapMemory(device, bufferMemory);
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
@@ -510,7 +507,7 @@ public:
           descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
           descriptorSetLayoutBinding.descriptorCount = 1;
           descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-          descriptorSetLahoutBindings[i] = descriptorSetLayoutBinding;
+          descriptorSetLayoutBindings[i] = descriptorSetLayoutBinding;
         }
 
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
@@ -574,13 +571,13 @@ public:
           VkWriteDescriptorSet writeDescriptorSet = {};
           writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
           writeDescriptorSet.dstSet = descriptorSet; // write to this descriptor set.
-          writeDescriptorSet.dstBinding = 0; // write to the first, and only binding.
+          writeDescriptorSet.dstBinding = i; // write to the ith binding.
           writeDescriptorSet.descriptorCount = 1; // update a single descriptor.
           writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; // storage buffer.
           writeDescriptorSet.pBufferInfo = &descriptorBufferInfos[i];
+          writeDescriptorSets[i] = writeDescriptorSet;
         }
 
-        
         // perform the update of the descriptor set.
         vkUpdateDescriptorSets(device, 3, writeDescriptorSets, 0, NULL);
     }
@@ -626,12 +623,12 @@ public:
         uint32_t filelength;
         // the code in comp.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t* code = readFile(filelength, "vector-add.spv");
+        uint32_t* code = readFile(filelength, "vector_add.spv");
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code;
         createInfo.codeSize = filelength;
-        
+
         VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
         delete[] code;
 
@@ -646,7 +643,7 @@ public:
         shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStageCreateInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCreateInfo.module = computeShaderModule;
-        shaderStageCreateInfo.pName = "main";
+        shaderStageCreateInfo.pName = "vector_add";
 
         /*
         The pipeline layout allows the pipeline to access descriptor sets. 
@@ -720,7 +717,7 @@ public:
         The number of workgroups is specified in the arguments.
         If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
         */
-        vkCmdDispatch(commandBuffer, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
+        vkCmdDispatch(commandBuffer, N, 1, 1);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
@@ -791,7 +788,6 @@ public:
 
 int main() {
     ComputeApplication app;
-
     try {
         app.run();
     }
