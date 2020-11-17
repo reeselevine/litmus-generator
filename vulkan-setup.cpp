@@ -116,7 +116,7 @@ private:
     uint32_t queueFamilyIndex;
 
 public:
-    void run() {
+    void run(char* file, char* op) {
         // Buffer size of the storage buffer that will contain the rendered mandelbrot set.
         bufferSize = sizeof(uint32_t) * N;
 
@@ -127,13 +127,13 @@ public:
         createBuffers();
         createDescriptorSetLayout();
         createDescriptorSet();
-        createComputePipeline();
+        createComputePipeline(file);
         createCommandBuffer();
         initializeVectors();
 
         // Finally, run the recorded command buffer.
         runCommandBuffer();
-        checkResult();
+        checkResult(op);
 
         // Clean up all vulkan resources.
         cleanup();
@@ -152,16 +152,13 @@ public:
         vkUnmapMemory(device, bufferMemory);
     }
 
-    void checkResult() {
+    void checkResult(char* op) {
         int32_t* aData = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&aData));
         int32_t *bData = aData + N;
         int32_t *cData = aData + 2*N;
         for (int32_t i = 0; i < N; i++) {
-            if (cData[i] != aData[i] + bData[i]) {
-		int32_t result = aData[i] + bData[i];
-		fprintf(stderr, "result is wrong!\n");
-            }
+            fprintf(stdout, "%d %s %d = %d\n", aData[i], op, bData[i], cData[i]);
         }
         vkUnmapMemory(device, bufferMemory);
     }
@@ -612,7 +609,7 @@ public:
         return (uint32_t *)str;
     }
 
-    void createComputePipeline() {
+    void createComputePipeline(char* file) {
         /*
         We create a compute pipeline here. 
         */
@@ -623,7 +620,7 @@ public:
         uint32_t filelength;
         // the code in comp.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t* code = readFile(filelength, "vector_add.spv");
+        uint32_t* code = readFile(filelength, file);
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code;
@@ -786,10 +783,12 @@ public:
     }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
     ComputeApplication app;
+    char* file = argv[1];
+    char* op = argv[2];
     try {
-        app.run();
+        app.run(file, op);
     }
     catch (const std::runtime_error& e) {
         printf("%s\n", e.what());
