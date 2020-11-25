@@ -13,6 +13,12 @@ int one_zero = 0;
 int zero_one = 0;
 int ones = 0;
 
+#ifdef NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
+
 // Used for validating return values of Vulkan API calls.
 #define VK_CHECK_RESULT(f) 																				\
 {																										\
@@ -35,6 +41,8 @@ private:
     In order to use Vulkan, you must create an instance. 
     */
     VkInstance instance;
+
+    VkDebugReportCallbackEXT debugReportCallback;
 
     /*
     The physical device is some device on the system that supports usage of Vulkan.
@@ -89,6 +97,8 @@ private:
         
     uint32_t bufferSize; // size of `buffer` in bytes.
     uint32_t requiredBufferSize; // the size of the buffer that vulkan actually needs
+
+    std::vector<const char *> enabledLayers;
 
     /*
     In order to execute commands on a device(GPU), the commands must be submitted
@@ -145,6 +155,21 @@ public:
         vkUnmapMemory(device, bufferMemory);
     }
 
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
+        VkDebugReportFlagsEXT                       flags,
+        VkDebugReportObjectTypeEXT                  objectType,
+        uint64_t                                    object,
+        size_t                                      location,
+        int32_t                                     messageCode,
+        const char*                                 pLayerPrefix,
+        const char*                                 pMessage,
+        void*                                       pUserData) {
+
+        printf("Debug Report: %s: %s\n", pLayerPrefix, pMessage);
+
+        return VK_FALSE;
+     }
+
     void checkResult() {
         int32_t* start = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&start));
@@ -162,6 +187,67 @@ public:
     }
 
     void createInstance() {
+        std::vector<const char *> enabledExtensions;
+        /*
+        By enabling validation layers, Vulkan will emit warnings if the API
+        is used incorrectly. We shall enable the layer VK_LAYER_LUNARG_standard_validation,
+        which is basically a collection of several useful validation layers.
+        */
+        if (enableValidationLayers) {
+            /*
+            We get all supported layers with vkEnumerateInstanceLayerProperties.
+            */
+            uint32_t layerCount;
+            vkEnumerateInstanceLayerProperties(&layerCount, NULL);
+
+            std::vector<VkLayerProperties> layerProperties(layerCount);
+            vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
+
+            /*
+            And then we simply check if VK_LAYER_LUNARG_standard_validation is among the supported layers.
+            */
+            bool foundLayer = false;
+            for (VkLayerProperties prop : layerProperties) {
+                
+                if (strcmp("VK_LAYER_LUNARG_standard_validation", prop.layerName) == 0) {
+                    foundLayer = true;
+                    break;
+                }
+
+            }
+            
+            if (!foundLayer) {
+                throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
+            }
+            enabledLayers.push_back("VK_LAYER_LUNARG_standard_validation"); // Alright, we can use this layer.
+
+            /*
+            We need to enable an extension named VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+            in order to be able to print the warnings emitted by the validation layer.
+
+            So again, we just check if the extension is among the supported extensions.
+            */
+            
+            uint32_t extensionCount;
+            
+            vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
+            std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+            vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties.data());
+
+            bool foundExtension = false;
+            for (VkExtensionProperties prop : extensionProperties) {
+                if (strcmp(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, prop.extensionName) == 0) {
+                    foundExtension = true;
+                    break;
+                }
+
+            }
+
+            if (!foundExtension) {
+                throw std::runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
+            }
+            enabledExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+        }		
 
         /*
         Next, we actually create the instance.
@@ -184,7 +270,13 @@ public:
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.flags = 0;
         createInfo.pApplicationInfo = &applicationInfo;
-        
+
+         // Give our desired layers and extensions to vulkan.
+        createInfo.enabledLayerCount = enabledLayers.size();
+        createInfo.ppEnabledLayerNames = enabledLayers.data();
+        createInfo.enabledExtensionCount = enabledExtensions.size();
+        createInfo.ppEnabledExtensionNames = enabledExtensions.data();
+       
         /*
         Actually create the instance.
         Having created the instance, we can actually start using vulkan.
@@ -193,6 +285,27 @@ public:
             &createInfo,
             NULL,
             &instance));
+
+        /*
+        Register a callback function for the extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME, so that warnings emitted from the validation
+        layer are actually printed.
+        */
+        if (enableValidationLayers) {
+            VkDebugReportCallbackCreateInfoEXT createInfo = {};
+            createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+            createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+            createInfo.pfnCallback = &debugReportCallbackFn;
+
+            // We have to explicitly load this function.
+            auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
+            if (vkCreateDebugReportCallbackEXT == nullptr) {
+                throw std::runtime_error("Could not load vkCreateDebugReportCallbackEXT");
+            }
+
+            // Create and register callback.
+            VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &createInfo, NULL, &debugReportCallback));
+        }
+
     }
 
     void findPhysicalDevice() {
@@ -238,10 +351,8 @@ public:
         for (VkPhysicalDevice device : devices) {
 	    VkPhysicalDeviceProperties properties;
 	    vkGetPhysicalDeviceProperties(device, &properties);
-	    printf("device name: %s\n", properties.deviceName); 
-            if (true) { // As above stated, we do no feature checks, so just accept.
+            if (properties.deviceID == 4935) { // We want the nvidia gpu on this server.
                 physicalDevice = device;
-		break;
             }
         }
     }
@@ -300,6 +411,8 @@ public:
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceCreateInfo.enabledLayerCount = enabledLayers.size();  // need to specify validation layers here as well.
+        deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
         deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo; // when creating the logical device, we also specify what queues it has.
         deviceCreateInfo.queueCreateInfoCount = 1;
         deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
@@ -655,6 +768,14 @@ public:
         /*
         Clean up all Vulkan Resources. 
         */
+        if (enableValidationLayers) {
+            // destroy callback.
+            auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+            if (func == nullptr) {
+                throw std::runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
+            }
+            func(instance, debugReportCallback, NULL);
+        }
 
         vkFreeMemory(device, bufferMemory, NULL);
         vkDestroyBuffer(device, test_data, NULL);	
@@ -675,10 +796,10 @@ int main(int argc, char* argv[]) {
     char* file = argv[1];
     try {
         app.run(file);
-        printf("Both zero: %d\n", zeros);
-        printf("Thread0 0, Thread1 1: %d\n", zero_one);
-        printf("Thread0 1, Thread1 0: %d\n", one_zero);
-        printf("Both one: %d\n", ones);
+        printf("x = 0, y = 0: %d\n", zeros);
+        printf("x = 0, y = 1: %d\n", zero_one);
+        printf("x = 1, y = 0: %d\n", one_zero);
+        printf("x = 1, y = 1: %d\n", ones);
     }
     catch (const std::runtime_error& e) {
         printf("%s\n", e.what());
