@@ -5,12 +5,12 @@ mo_relaxed = "memory_order_relaxed"
 mo_seq_cst = "memory_order_seq_cst"
 
 def generate_spin():
-    header = "void spin(__global atomic_uint* barrier) {"
+    header = "static void spin(__global atomic_uint* barrier) {"
     body = "\n  ".join([
         header,
         "int i = 0;",
-        "atomic_fetch_add_explicit(barrier, 1, memory_order_relaxed);",
-        "while (i < 1000 & val < 2) {",
+        "uint val = atomic_fetch_add_explicit(barrier, 1, memory_order_relaxed);",
+        "while (i < 1000 && val < 2) {",
         "  val = {}".format(generate_atomic_load("barrier", mo_relaxed)),
         "  i++;",
         "}"
