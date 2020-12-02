@@ -11,7 +11,7 @@
                 {
                     "action": "read",
                     "memoryLocation": "y",
-                    "register": "r0"
+                    "variable": "r0"
                 }
             ]
         },
@@ -26,20 +26,20 @@
                 {
                     "action": "read",
                     "memoryLocation": "x",
-                    "register": "r1"
+                    "variable": "r1"
                 }
             ]
         }
     ],
     "postConditions": [
         {
-            "type": "register",
-            "variable": "r0",
+            "type": "variable",
+            "id": "r0",
             "value": 0
         },
         {
-            "type": "register",
-            "variable": "r1",
+            "type": "variable",
+            "id": "r1",
             "value": 0
         }
     ]

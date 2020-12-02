@@ -10,10 +10,10 @@ class LitmusTest:
     def __init__(self, config):
         self.config = config
         self.memory_locations = {}
-        self.registers = {}
+        self.variables = {}
         self.threads = []
         mem_loc = 0
-        register_output = 0
+        variable_output = 0
         for thread in config['threads']:
             instructions = []
             for instruction in thread['actions']:
@@ -21,10 +21,10 @@ class LitmusTest:
                     self.memory_locations[instruction['memoryLocation']] = mem_loc
                     mem_loc += 1
                 if instruction['action'] == "read":
-                    if instruction['register'] not in self.registers:
-                        self.registers[instruction['register']] = register_output
-                        register_output += 1
-                    instructions += [self.ReadInstruction(self.memory_locations[instruction['memoryLocation']], instruction['register'])]
+                    if instruction['variable'] not in self.variables:
+                        self.variables[instruction['variable']] = variable_output
+                        variable_output += 1
+                    instructions += [self.ReadInstruction(self.memory_locations[instruction['memoryLocation']], instruction['variable'])]
                 if instruction['action'] == "write":
                     instructions += [self.WriteInstruction(self.memory_locations[instruction['memoryLocation']], instruction['value'])]
             self.threads += [self.Thread(thread['workgroup'], instructions)]
@@ -36,12 +36,12 @@ class LitmusTest:
 
     class ReadInstruction(Instruction):
 
-        def __init__(self, mem_loc, register):
+        def __init__(self, mem_loc, variable):
             self.mem_loc = mem_loc
-            self.register = register
+            self.variable = variable
 
         def openCL_repr(self):
-            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.register, self.mem_loc, mo_relaxed)
+            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.variable, self.mem_loc, mo_relaxed)
 
     class WriteInstruction(Instruction):
 
@@ -60,19 +60,19 @@ class LitmusTest:
     def generate_openCL_kernel(self):
         body_statements = []
         for thread in self.threads:
-            spin = "spin(&test_data[2]);"
-            registers = set()
+            spin = "spin(barrier);"
+            variables = set()
             thread_statements = [spin]
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
-                    registers.add(instr.register)
+                    variables.add(instr.variable)
                 thread_statements += [instr.openCL_repr()]
-            for register in registers:
-                thread_statements += ["atomic_store_explicit(&results[{}], {}, {});".format(self.registers[register], register, mo_seq_cst)]
+            for variable in variables:
+                thread_statements += ["atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, mo_seq_cst)]
             thread_statements = ["    {}".format(statement) for statement in thread_statements]
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup))] + thread_statements + ["  }"]
         attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(len(self.threads))
-        header = "__kernel void litmus_test(__global atomic_uint* test_data, __global atomic_uint* results) {"
+        header = "__kernel void litmus_test(__global atomic_uint* test_data, __global atomic_uint* results, __global atomic_uint* barrier) {"
         kernel = "\n".join([attribute, header] + body_statements + ["}\n"])
         spin_func = self.generate_spin()
         return "\n\n".join([spin_func, kernel])

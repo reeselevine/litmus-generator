@@ -7,7 +7,7 @@
 #include <cmath>
 #include <stdio.h>
 
-const int N = 4; // Number of elements in each buffer
+const int numWorkgroups = 2;
 int zeros = 0;
 int one_zero = 0;
 int zero_one = 0;
@@ -89,15 +89,18 @@ private:
 
     The memory that backs the bufferX is bufferMemoryX. 
     */
-    VkBuffer test_data;
-    VkBuffer results;
+    struct BufferInfo {
+        VkBuffer buffer;
+        int elements; // the number of elements that the application needs
+        uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
+    };
+    BufferInfo testData;
+    BufferInfo results;
+    BufferInfo barrier;
     VkDeviceMemory bufferMemory;
 
-    VkBuffer buffers[2] = {test_data, results};
+    std::vector<BufferInfo> bufferInfos = {testData, results, barrier};
         
-    uint32_t bufferSize; // size of `buffer` in bytes.
-    uint32_t requiredBufferSize; // the size of the buffer that vulkan actually needs
-
     std::vector<const char *> enabledLayers;
 
     /*
@@ -122,8 +125,9 @@ private:
 
 public:
     void run(char* file) {
-        bufferSize = sizeof(uint32_t) * N;
-
+    	bufferInfos[0].elements = 4;
+	bufferInfos[1].elements = 2;
+	bufferInfos[2].elements = 1;
         // Initialize vulkan:
         createInstance();
         findPhysicalDevice();
@@ -133,7 +137,7 @@ public:
         createDescriptorSet();
         createComputePipeline(file);
      	createCommandBuffer();
-	for (int i = 0; i < 100000; i++) {
+	for (int i = 0; i < 10000; i++) {
 	    initializeVectors();
 
             // Finally, run the recorded command buffer.
@@ -145,15 +149,15 @@ public:
     }
 
     void initializeVectors() {
-        int32_t *testData = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&testData));
-        int32_t *results = testData + requiredBufferSize/sizeof(uint32_t);
-        for (int32_t i = 0; i < N; i++) {
-            testData[i] = 0;
-            results[i] = 0;
-        }
-	results[2] = 0;
-	results[3] = 1;
+        uint32_t *data = NULL;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
+        uint32_t *_results = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
+        uint32_t *_barrier = _results + bufferInfos[1].requiredSize/sizeof(uint32_t);
+        for (uint32_t i = 0; i < bufferInfos[0].elements; i++) 
+            data[i] = 0;
+        for (uint32_t i = 0; i < bufferInfos[1].elements; i++)
+            _results[i] = 0;
+        *_barrier = 0;
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -175,7 +179,7 @@ public:
     void checkResult() {
         int32_t* start = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&start));
-        int32_t* output = start + requiredBufferSize/sizeof(uint32_t);
+        int32_t* output = start + bufferInfos[0].requiredSize/sizeof(uint32_t);
         if (output[0] == 0 && output[1] == 0) {
             zeros++;
         } else if (output[0] == 0 && output[1] == 1) {
@@ -184,7 +188,9 @@ public:
             one_zero++;
         } else if (output[0] == 1 && output[1] == 1) {
             ones++;
-        }
+	} else {
+	  // printf("what the heck: %d\n", output[1]);
+	}
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -262,9 +268,9 @@ public:
         */
         VkApplicationInfo applicationInfo = {};
         applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        applicationInfo.pApplicationName = "Hello world app";
+        applicationInfo.pApplicationName = "Litmus Tester";
         applicationInfo.applicationVersion = 0;
-        applicationInfo.pEngineName = "awesomeengine";
+        applicationInfo.pEngineName = "LSD Lab";
         applicationInfo.engineVersion = 0;
         applicationInfo.apiVersion = VK_API_VERSION_1_0;;
         
@@ -444,36 +450,34 @@ public:
     }
 
     void createBuffers() {
+        uint32_t requiredBufferSize = 0;
         /*
         We will now create our buffers. These will be used as arguments (descriptors) in a computer shade later. 
         */
-
-        for (int i = 0; i < 2; i++) {
+	int i = 0;
+        for (BufferInfo info : bufferInfos) {
           VkBufferCreateInfo bufferCreateInfo = {};
           bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-          bufferCreateInfo.size = bufferSize; // buffer size in bytes. 
+          bufferCreateInfo.size = info.elements * sizeof(uint32_t); // buffer size in bytes. 
           bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
           bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+          VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &info.buffer)); // create buffer.
 
-          VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &buffers[i])); // create buffer.
+          VkMemoryRequirements memoryRequirements;
+          vkGetBufferMemoryRequirements(device, info.buffer, &memoryRequirements);
+          info.requiredSize = memoryRequirements.size;
+          requiredBufferSize += memoryRequirements.size;
+	  bufferInfos[i] = info;
+	  i++;
         }
-
         /*
         But the buffer doesn't allocate memory for itself, so we must do that manually.
         */
     
         /*
-        First, we find the memory requirements for the buffers. All of the buffers have the same requirements, so we check
-        based on the first buffer.
-        */
-        VkMemoryRequirements memoryRequirements;
-        vkGetBufferMemoryRequirements(device, buffers[0], &memoryRequirements);
-	requiredBufferSize = memoryRequirements.size;
-        
-        /*
         Now use obtained memory requirements info to allocate the memory for the buffer.
         */
-        VkDeviceSize memorySize = requiredBufferSize * 2;
+        VkDeviceSize memorySize = requiredBufferSize;
         VkMemoryAllocateInfo allocateInfo = {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocateInfo.allocationSize = memorySize; // specify required memory.
@@ -487,6 +491,10 @@ public:
         visible to the host(CPU), without having to call any extra flushing commands. So mainly for convenience, we set
         this flag.
         */
+
+        VkMemoryRequirements memoryRequirements;
+        vkGetBufferMemoryRequirements(device, bufferInfos[0].buffer, &memoryRequirements);
+
         allocateInfo.memoryTypeIndex = findMemoryType(
             memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
@@ -494,9 +502,9 @@ public:
         
         // Now associate each buffer with the memory, increasing the offset at each iteration to avoid overlapping memory regions.
         VkDeviceSize memoryOffset = 0;
-        for (int i = 0; i < 2; i++) {
-          VK_CHECK_RESULT(vkBindBufferMemory(device, buffers[i], bufferMemory, memoryOffset));
-          memoryOffset += requiredBufferSize;
+        for (BufferInfo info : bufferInfos) {
+          VK_CHECK_RESULT(vkBindBufferMemory(device, info.buffer, bufferMemory, memoryOffset));
+          memoryOffset += info.requiredSize;
         }
     }
 
@@ -509,8 +517,8 @@ public:
         /*
         Here we specify a binding of type VK_DESCRIPTOR_TYPE_STORAGE_BUFFER to the binding point i. 
         */
-        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[2];
-        for (int i = 0; i < 2; i++) {
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[bufferInfos.size()];
+        for (int i = 0; i < bufferInfos.size(); i++) {
           VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
           descriptorSetLayoutBinding.binding = i; // binding = i
           descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -521,7 +529,7 @@ public:
 
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.bindingCount = 2; // two bindings in this descriptor set layout. 
+        descriptorSetLayoutCreateInfo.bindingCount = bufferInfos.size(); // number of bindings in this descriptor set layout. 
         descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
 
         // Create the descriptor set layout. 
@@ -539,7 +547,7 @@ public:
         */
         VkDescriptorPoolSize descriptorPoolSize = {};
         descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = 2;
+        descriptorPoolSize.descriptorCount = bufferInfos.size();
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -563,18 +571,18 @@ public:
         VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
 
         /*
-        Next, we need to connect our actual storage buffer with the descrptor. 
+        Next, we need to connect our actual storage buffer with the descriptor. 
         We use vkUpdateDescriptorSets() to update the descriptor set.
         */
 
-        VkDescriptorBufferInfo descriptorBufferInfos[2];
-        VkWriteDescriptorSet writeDescriptorSets[2];
-        for (int i = 0; i < 2; i++) {
+        VkDescriptorBufferInfo descriptorBufferInfos[bufferInfos.size()];
+        VkWriteDescriptorSet writeDescriptorSets[bufferInfos.size()];
+        for (int i = 0; i < bufferInfos.size(); i++) {
           // Specify the buffer to bind to the descriptor.
           VkDescriptorBufferInfo descriptorBufferInfo = {};
-          descriptorBufferInfo.buffer = buffers[i];
+          descriptorBufferInfo.buffer = bufferInfos[i].buffer;
           descriptorBufferInfo.offset = 0;
-          descriptorBufferInfo.range = bufferSize;
+          descriptorBufferInfo.range = VK_WHOLE_SIZE;
           descriptorBufferInfos[i] = descriptorBufferInfo;
 
           VkWriteDescriptorSet writeDescriptorSet = {};
@@ -588,7 +596,7 @@ public:
         }
 
         // perform the update of the descriptor set.
-        vkUpdateDescriptorSets(device, 2, writeDescriptorSets, 0, NULL);
+        vkUpdateDescriptorSets(device, bufferInfos.size(), writeDescriptorSets, 0, NULL);
     }
 
     // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -726,7 +734,7 @@ public:
         The number of workgroups is specified in the arguments.
         If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
         */
-        vkCmdDispatch(commandBuffer, N, 1, 1);
+        vkCmdDispatch(commandBuffer, numWorkgroups, 1, 1);
 
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }
@@ -780,8 +788,8 @@ public:
         }
 
         vkFreeMemory(device, bufferMemory, NULL);
-        vkDestroyBuffer(device, test_data, NULL);	
-        vkDestroyBuffer(device, results, NULL);	
+	for (BufferInfo info : bufferInfos) 
+          vkDestroyBuffer(device, info.buffer, NULL);	
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
