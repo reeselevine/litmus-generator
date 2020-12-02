@@ -133,7 +133,7 @@ public:
         createDescriptorSet();
         createComputePipeline(file);
      	createCommandBuffer();
-	for (int i = 0; i < 10000; i++) {
+	for (int i = 0; i < 100000; i++) {
 	    initializeVectors();
 
             // Finally, run the recorded command buffer.
@@ -145,13 +145,15 @@ public:
     }
 
     void initializeVectors() {
-        int32_t *aData = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&aData));
-        int32_t *bData = aData + requiredBufferSize/sizeof(uint32_t);
+        int32_t *testData = NULL;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&testData));
+        int32_t *results = testData + requiredBufferSize/sizeof(uint32_t);
         for (int32_t i = 0; i < N; i++) {
-            aData[i] = 0;
-            bData[i] = 0;
+            testData[i] = 0;
+            results[i] = 0;
         }
+	results[2] = 0;
+	results[3] = 1;
         vkUnmapMemory(device, bufferMemory);
     }
 
