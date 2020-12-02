@@ -1,0 +1,46 @@
+{
+    "threads": [
+        {
+            "workgroup": 0,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "register": "r0"
+                }
+            ]
+        },
+        {
+            "workgroup": 1,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "y",
+                    "value": 1
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "register": "r1"
+                }
+            ]
+        }
+    ],
+    "postConditions": [
+        {
+            "type": "register",
+            "variable": "r0",
+            "value": 0
+        },
+        {
+            "type": "register",
+            "variable": "r1",
+            "value": 0
+        }
+    ]
+}
