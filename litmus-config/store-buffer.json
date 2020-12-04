@@ -1,4 +1,5 @@
 {
+    "testName": "store-buffer",
     "threads": [
         {
             "workgroup": 0,

@@ -8,10 +8,8 @@
 #include <stdio.h>
 
 const int numWorkgroups = 2;
-int zeros = 0;
-int one_zero = 0;
-int zero_one = 0;
-int ones = 0;
+int weakBehavior = 0;
+int nonWeakBehavior = 0;
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -86,20 +84,15 @@ private:
 
     /*
     Buffers that will be used in the compute shader.
-
-    The memory that backs the bufferX is bufferMemoryX. 
     */
     struct BufferInfo {
         VkBuffer buffer;
         int elements; // the number of elements that the application needs
         uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
     };
-    BufferInfo testData;
-    BufferInfo results;
-    BufferInfo barrier;
     VkDeviceMemory bufferMemory;
 
-    std::vector<BufferInfo> bufferInfos = {testData, results, barrier};
+    std::vector<BufferInfo> bufferInfos;
         
     std::vector<const char *> enabledLayers;
 
@@ -125,9 +118,12 @@ private:
 
 public:
     void run(char* file) {
+        bufferInfos.push_back(BufferInfo());
     	bufferInfos[0].elements = 4;
-	bufferInfos[1].elements = 2;
-	bufferInfos[2].elements = 1;
+        bufferInfos.push_back(BufferInfo());
+	    bufferInfos[1].elements = 2;
+        bufferInfos.push_back(BufferInfo());
+	    bufferInfos[2].elements = 1;
         // Initialize vulkan:
         createInstance();
         findPhysicalDevice();
@@ -140,24 +136,23 @@ public:
 	for (int i = 0; i < 10000; i++) {
 	    initializeVectors();
 
-            // Finally, run the recorded command buffer.
-            runCommandBuffer();
-            checkResult();
+        // Finally, run the recorded command buffer.
+        runCommandBuffer();
+        checkResult();
 	}
         // Clean up all vulkan resources.
         cleanup();
     }
 
     void initializeVectors() {
-        uint32_t *data = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
-        uint32_t *_results = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
-        uint32_t *_barrier = _results + bufferInfos[1].requiredSize/sizeof(uint32_t);
-        for (uint32_t i = 0; i < bufferInfos[0].elements; i++) 
-            data[i] = 0;
-        for (uint32_t i = 0; i < bufferInfos[1].elements; i++)
-            _results[i] = 0;
-        *_barrier = 0;
+        uint32_t *memory = NULL;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&memory));
+        for (BufferInfo info : bufferInfos) {
+            for (uint32_t i = 0; i < info.requiredSize/sizeof(uint32_t); i++) {
+                *memory = 0;
+                memory++;
+            }
+        }
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -177,20 +172,14 @@ public:
      }
 
     void checkResult() {
-        int32_t* start = NULL;
-        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&start));
-        int32_t* output = start + bufferInfos[0].requiredSize/sizeof(uint32_t);
+        int32_t* data = NULL;
+        VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
+        int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
         if (output[0] == 0 && output[1] == 0) {
-            zeros++;
-        } else if (output[0] == 0 && output[1] == 1) {
-            zero_one++;
-        } else if (output[0] == 1 && output[1] == 0) {
-            one_zero++;
-        } else if (output[0] == 1 && output[1] == 1) {
-            ones++;
-	} else {
-	  // printf("what the heck: %d\n", output[1]);
-	}
+            weakBehavior++;
+        } else {
+            nonWeakBehavior++;
+        }
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -454,7 +443,7 @@ public:
         /*
         We will now create our buffers. These will be used as arguments (descriptors) in a computer shade later. 
         */
-	int i = 0;
+	    int i = 0;
         for (BufferInfo info : bufferInfos) {
           VkBufferCreateInfo bufferCreateInfo = {};
           bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -467,8 +456,8 @@ public:
           vkGetBufferMemoryRequirements(device, info.buffer, &memoryRequirements);
           info.requiredSize = memoryRequirements.size;
           requiredBufferSize += memoryRequirements.size;
-	  bufferInfos[i] = info;
-	  i++;
+	      bufferInfos[i] = info;
+	      i++;
         }
         /*
         But the buffer doesn't allocate memory for itself, so we must do that manually.
@@ -788,7 +777,7 @@ public:
         }
 
         vkFreeMemory(device, bufferMemory, NULL);
-	for (BufferInfo info : bufferInfos) 
+	    for (BufferInfo info : bufferInfos) 
           vkDestroyBuffer(device, info.buffer, NULL);	
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
@@ -806,10 +795,8 @@ int main(int argc, char* argv[]) {
     char* file = argv[1];
     try {
         app.run(file);
-        printf("x = 0, y = 0: %d\n", zeros);
-        printf("x = 0, y = 1: %d\n", zero_one);
-        printf("x = 1, y = 0: %d\n", one_zero);
-        printf("x = 1, y = 1: %d\n", ones);
+        printf("weak behavior: %d\n", weakBehavior);
+        printf("non weak behavior: %d\n", nonWeakBehavior);
     }
     catch (const std::runtime_error& e) {
         printf("%s\n", e.what());
