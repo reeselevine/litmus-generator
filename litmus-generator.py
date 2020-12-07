@@ -1,6 +1,7 @@
 import sys
 import argparse
 import json
+import subprocess
 
 mo_relaxed = "memory_order_relaxed"
 mo_seq_cst = "memory_order_seq_cst"
@@ -122,11 +123,20 @@ class LitmusTest:
                 conditions.append("data[{}] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
         return " && ".join(conditions)
 
+    def spirv_code(self):
+        spirv_output = subprocess.check_output(["/home/tyler/Documents/clspv/alan_clspv/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points","-mfmt=c", self.test_name + ".cl", "-o",  "-"])
+        decoded_spirv = spirv_output.decode().replace("\n", "")
+        spirv_length = decoded_spirv.count(",") + 1
+        self.template_replacements["shader_code"] = spirv_output.decode().replace("\n", "")
+        self.template_replacements["shader_size"] = str(spirv_length)
+
     def generate_vulkan_setup(self):
         template = open("litmus-setup-template.cpp", 'r')
+        self.spirv_code()
         template_content = template.read()
         template.close()
-        template_content = template_content.replace("{{ post_condition }}", self.template_replacements["post_condition"])
+        for key in self.template_replacements:
+            template_content = template_content.replace("{{ " + key + " }}", self.template_replacements[key])
         output_file = open(self.test_name + "-vulkan-setup.cpp", "w")
         output_file.write(template_content)
         output_file.close()
