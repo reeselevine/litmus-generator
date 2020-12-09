@@ -1,0 +1,47 @@
+{
+    "testName": "load-buffer",
+    "threads": [
+        {
+            "workgroup": 0,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r0"
+                },
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "workgroup": 1,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r1"
+                },
+                {
+                    "action": "write",
+                    "memoryLocation": "y",
+                    "value": 1
+                }
+            ]
+        }
+    ],
+    "postConditions": [
+        {
+            "type": "variable",
+            "id": "r0",
+            "value": 1
+        },
+        {
+            "type": "variable",
+            "id": "r1",
+            "value": 1
+        }
+    ]
+}

@@ -1,0 +1,67 @@
+{
+    "testName": "isa2",
+    "threads": [
+        {
+            "workgroup": 0,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1
+                },
+                {
+                    "action": "write",
+                    "memoryLocation": "y",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "workgroup": 1,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r0"
+                },
+                {
+                    "action": "write",
+                    "memoryLocation": "z",
+                    "value": 1
+                }
+            ]
+        },
+        {
+            "workgroup": 2,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "z",
+                    "variable": "r1"
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r2"
+                }
+            ]
+        }
+    ],
+    "postConditions": [
+        {
+            "type": "variable",
+            "id": "r0",
+            "value": 1
+        },
+        {
+            "type": "variable",
+            "id": "r1",
+            "value": 1
+        },
+        {
+            "type": "variable",
+            "id": "r2",
+            "value": 0
+        }
+    ]
+}
