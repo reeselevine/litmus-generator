@@ -1,5 +1,6 @@
 {
     "testName": "iriw",
+    "numWorkgroups": 4,
     "threads": [
         {
             "workgroup": 0,

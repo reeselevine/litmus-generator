@@ -7,7 +7,7 @@
 #include <cmath>
 #include <stdio.h>
 
-const int numWorkgroups = 2;
+const int numWorkgroups = {{ numWorkgroups }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -61,16 +61,16 @@ private:
     VkQueue queue; // a queue supporting compute operations.
     uint32_t queueFamilyIndex;
 
-    uint32_t shader[{{ shader_size }}] = {{ shader_code }};
+    uint32_t shader[{{ shaderSize }}] = {{ shaderCode }};
 
 public:
     void run() {
         bufferInfos.push_back(BufferInfo());
-    	bufferInfos[0].elements = 4;
+        bufferInfos[0].elements = 4;
         bufferInfos.push_back(BufferInfo());
-	    bufferInfos[1].elements = 2;
+        bufferInfos[1].elements = {{ numOutputs }};
         bufferInfos.push_back(BufferInfo());
-	    bufferInfos[2].elements = 1;
+        bufferInfos[2].elements = 1;
         createInstance();
         findPhysicalDevice();
         createDevice();
@@ -118,7 +118,7 @@ public:
         int32_t* data = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
         int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
-        if ({{ post_condition }}) {
+        if ({{ postCondition }}) {
             weakBehavior++;
         } else {
             nonWeakBehavior++;

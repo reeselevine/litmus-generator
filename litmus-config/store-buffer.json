@@ -3,6 +3,7 @@
     "threads": [
         {
             "workgroup": 0,
+            "localId": 0,
             "actions": [
                 {
                     "action": "write",
@@ -18,6 +19,7 @@
         },
         {
             "workgroup": 1,
+            "localId": 0,
             "actions": [
                 {
                     "action": "write",
