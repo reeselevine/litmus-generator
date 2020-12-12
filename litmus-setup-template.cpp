@@ -6,8 +6,13 @@
 #include <stdexcept>
 #include <cmath>
 #include <stdio.h>
+#include <time.h>
+using namespace std;
 
 const int numWorkgroups = {{ numWorkgroups }};
+const int workgroupSize = {{ workgroupSize }};
+const int shuffle = {{ shuffle }};
+const int barrier = {{ barrier }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -45,18 +50,20 @@ private:
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
 
+    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER} BufferType;
     /*
     Buffers that will be used in the compute shader.
     */
     struct BufferInfo {
+        BufferType bufferType;
         VkBuffer buffer;
         int elements; // the number of elements that the application needs
         uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
     };
     VkDeviceMemory bufferMemory;
-    std::vector<BufferInfo> bufferInfos;
+    vector<BufferInfo> bufferInfos;
         
-    std::vector<const char *> enabledLayers;
+    vector<const char *> enabledLayers;
 
     VkQueue queue; // a queue supporting compute operations.
     uint32_t queueFamilyIndex;
@@ -65,12 +72,21 @@ private:
 
 public:
     void run() {
+        srand (time(NULL));
         bufferInfos.push_back(BufferInfo());
-        bufferInfos[0].elements = 4;
+        bufferInfos[0].bufferType = TEST_DATA;
+        bufferInfos[0].elements = 4; // testing buffer 
         bufferInfos.push_back(BufferInfo());
-        bufferInfos[1].elements = {{ numOutputs }};
+        bufferInfos[1].bufferType = RESULTS;
+        bufferInfos[1].elements = {{ numOutputs }}; // output buffer
         bufferInfos.push_back(BufferInfo());
-        bufferInfos[2].elements = 1;
+        bufferInfos[2].bufferType = SHUFFLE_IDS;
+        bufferInfos[2].elements = numWorkgroups * workgroupSize; // thread shuffle buffer
+        if (barrier) {
+            bufferInfos.push_back(BufferInfo());
+            bufferInfos[3].bufferType = BARRIER;
+            bufferInfos[3].elements = 1; // barrier buffer
+        }
         createInstance();
         findPhysicalDevice();
         createDevice();
@@ -79,21 +95,53 @@ public:
         createDescriptorSet();
         createComputePipeline();
      	createCommandBuffer();
-	for (int i = 0; i < 10000; i++) {
-	    initializeVectors();
-        runCommandBuffer();
-        checkResult();
-	}
+        for (int i = 0; i < 10000; i++) {
+            initializeVectors();
+            runCommandBuffer();
+            checkResult();
+	    }
         cleanup();
+    }
+
+    void shuffleIds(uint32_t *ids) {
+        // initialize identity mapping
+        for (int i = 0; i < numWorkgroups * workgroupSize; i++) {
+            ids[i] = i;
+        }
+        if (shuffle) {
+            // shuffle workgroups
+            for (int i = numWorkgroups - 1; i > 0; i--) {
+                int x = rand() % (i + 1);
+                if (workgroupSize > 1) {
+                    // swap and shuffle invocations within a workgroup
+                    for (int j = workgroupSize - 1; j > 0; j--) {
+                        int y = rand() % (j + 1);
+                        int z = rand() % (j + 1);
+                        uint32_t temp = ids[i * workgroupSize + y];
+                        ids[i * workgroupSize + y] = ids[shuffle * workgroupSize + z];
+                        ids[x * workgroupSize + z] = temp;
+                    }
+                } else {
+                    uint32_t temp = ids[i];
+                    ids[i] = ids[x];
+                    ids[x] = temp;
+                }
+            }
+        }
     }
 
     void initializeVectors() {
         uint32_t *memory = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&memory));
         for (BufferInfo info : bufferInfos) {
-            for (uint32_t i = 0; i < info.requiredSize/sizeof(uint32_t); i++) {
-                *memory = 0;
-                memory++;
+            if (info.bufferType == SHUFFLE_IDS) {
+                shuffleIds(memory);
+                memory += info.requiredSize/sizeof(uint32_t);
+            } else {
+                for (uint32_t i = 0; i < info.requiredSize/sizeof(uint32_t); i++) {
+                    *memory = 0;
+                    memory++;
+                }
             }
         }
         vkUnmapMemory(device, bufferMemory);
@@ -127,11 +175,11 @@ public:
     }
 
     void createInstance() {
-        std::vector<const char *> enabledExtensions;
+        vector<const char *> enabledExtensions;
         if (enableValidationLayers) {
             uint32_t layerCount;
             vkEnumerateInstanceLayerProperties(&layerCount, NULL);
-            std::vector<VkLayerProperties> layerProperties(layerCount);
+            vector<VkLayerProperties> layerProperties(layerCount);
             vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
             bool foundLayer = false;
             for (VkLayerProperties prop : layerProperties) {
@@ -141,12 +189,12 @@ public:
                 }
             }
             if (!foundLayer) {
-                throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
+                throw runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
             }
             enabledLayers.push_back("VK_LAYER_LUNARG_standard_validation");
             uint32_t extensionCount;
             vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
-            std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+            vector<VkExtensionProperties> extensionProperties(extensionCount);
             vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensionProperties.data());
             bool foundExtension = false;
             for (VkExtensionProperties prop : extensionProperties) {
@@ -156,7 +204,7 @@ public:
                 }
             }
             if (!foundExtension) {
-                throw std::runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
+                throw runtime_error("Extension VK_EXT_DEBUG_REPORT_EXTENSION_NAME not supported\n");
             }
             enabledExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
         }		
@@ -188,7 +236,7 @@ public:
             createInfo.pfnCallback = &debugReportCallbackFn;
             auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
             if (vkCreateDebugReportCallbackEXT == nullptr) {
-                throw std::runtime_error("Could not load vkCreateDebugReportCallbackEXT");
+                throw runtime_error("Could not load vkCreateDebugReportCallbackEXT");
             }
             VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &createInfo, NULL, &debugReportCallback));
         }
@@ -199,9 +247,9 @@ public:
         uint32_t deviceCount;
         vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
         if (deviceCount == 0) {
-            throw std::runtime_error("could not find a device with vulkan support");
+            throw runtime_error("could not find a device with vulkan support");
         }
-        std::vector<VkPhysicalDevice> devices(deviceCount);
+        vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
         for (VkPhysicalDevice device : devices) {
 	    VkPhysicalDeviceProperties properties;
@@ -215,7 +263,7 @@ public:
     uint32_t getComputeQueueFamilyIndex() {
         uint32_t queueFamilyCount;
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, NULL);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
         uint32_t i = 0;
         for (; i < queueFamilies.size(); ++i) {
@@ -225,7 +273,7 @@ public:
             }
         }
         if (i == queueFamilies.size()) {
-            throw std::runtime_error("could not find a queue family that supports operations");
+            throw runtime_error("could not find a queue family that supports operations");
         }
         return i;
     }
@@ -423,7 +471,7 @@ public:
         if (enableValidationLayers) {
             auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
             if (func == nullptr) {
-                throw std::runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
+                throw runtime_error("Could not load vkDestroyDebugReportCallbackEXT");
             }
             func(instance, debugReportCallback, NULL);
         }
@@ -449,7 +497,7 @@ int main(int argc, char* argv[]) {
         printf("weak behavior: %d\n", weakBehavior);
         printf("non weak behavior: %d\n", nonWeakBehavior);
     }
-    catch (const std::runtime_error& e) {
+    catch (const runtime_error& e) {
         printf("%s\n", e.what());
         return EXIT_FAILURE;
     }

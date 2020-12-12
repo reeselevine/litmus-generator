@@ -6,6 +6,7 @@ import subprocess
 mo_relaxed = "memory_order_relaxed"
 mo_seq_cst = "memory_order_seq_cst"
 DEFAULT_LOCAL_ID = 0
+defaults_dict = {"numWorkgroups": 4, "workgroupSize": 1, "shuffle": 0, "barrier": 1}
 
 class LitmusTest:
 
@@ -55,10 +56,14 @@ class LitmusTest:
         self.template_replacements = {}
         self.initialize_threads(config)
         self.initialize_post_conditions(config)
-        if 'numWorkgroups' in config:
-            self.template_replacements['numWorkgroups'] = config['numWorkgroups']
-        else:
-            self.template_replacements['numWorkgroups'] = len(self.threads)
+        self.initialize_template_replacements(config)
+
+    def initialize_template_replacements(self, config):
+        for key in defaults_dict:
+            if key in config:
+                self.template_replacements[key] = config[key]
+            else:
+                self.template_replacements[key] = defaults_dict[key]
 
     def initialize_threads(self, config):
         mem_loc = 0
@@ -89,9 +94,10 @@ class LitmusTest:
     def generate_openCL_kernel(self):
         body_statements = []
         for thread in self.threads:
-            spin = "spin(barrier);"
             variables = set()
-            thread_statements = [spin]
+            thread_statements = []
+            if self.template_replacements['barrier'] == 1:
+                thread_statements.append("spin(barrier);")
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
                     variables.add(instr.variable)
@@ -100,11 +106,15 @@ class LitmusTest:
                 thread_statements.append("atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, mo_seq_cst))
             thread_statements = ["    {}".format(statement) for statement in thread_statements]
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id))] + thread_statements + ["  }"]
-        attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['numWorkgroups'])
-        header = "__kernel void litmus_test(__global atomic_uint* test_data, __global atomic_uint* results, __global atomic_uint* barrier) {"
-        kernel = "\n".join([attribute, header] + body_statements + ["}\n"])
-        spin_func = self.generate_spin()
-        kernel = "\n\n".join([spin_func, kernel])
+        attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['workgroupSize'])
+        kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids"]
+        if self.template_replacements['barrier'] == 1:
+            kernel_args.append("__global atomic_uint* barrier")
+        kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
+        kernel = "\n".join([attribute, kernel_func_def] + body_statements + ["}\n"])
+        if self.template_replacements['barrier'] == 1:
+            spin_func = self.generate_spin()
+            kernel = "\n\n".join([spin_func, kernel])
         output_file = open(self.test_name + ".cl", "w")
         output_file.write(kernel)
         output_file.close()
@@ -123,7 +133,7 @@ class LitmusTest:
         return "\n".join([body, "}"])
 
     def thread_filter(self, workgroup, thread=0):
-        return "if (get_group_id(0) == {} && get_local_id(0) == {}) {{".format(workgroup, thread)
+        return "if (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
 
     def initialize_post_conditions(self, config):
         num_outputs = 0
