@@ -6,7 +6,12 @@ import subprocess
 mo_relaxed = "memory_order_relaxed"
 mo_seq_cst = "memory_order_seq_cst"
 DEFAULT_LOCAL_ID = 0
-defaults_dict = {"numWorkgroups": 4, "workgroupSize": 1, "shuffle": 0, "barrier": 1}
+defaults_dict = {
+    "numWorkgroups": 4,
+    "workgroupSize": 1,
+    "shuffle": 0,
+    "barrier": 1,
+    "memStride": 1}
 
 class LitmusTest:
 
@@ -78,14 +83,19 @@ class LitmusTest:
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
                         variable_output += 1
-                    instructions.append(self.ReadInstruction(self.memory_locations[instruction['memoryLocation']], instruction['variable']))
+                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable']))
                 if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(self.memory_locations[instruction['memoryLocation']], instruction['value']))
+                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value']))
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
                 local_id = DEFAULT_LOCAL_ID
             self.threads.append(self.Thread(thread['workgroup'], local_id, instructions))
+        if 'testMemorySize' in config:
+            self.template_replacements['testMemorySize'] = config['testMemorySize']
+        else:
+            self.template_replacements['testMemorySize'] = len(self.memory_locations)
+        self.template_replacements['numMemLocations'] = len(self.memory_locations)
 
     def generate(self):
         self.generate_openCL_kernel()
@@ -108,6 +118,8 @@ class LitmusTest:
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id))] + thread_statements + ["  }"]
         attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['workgroupSize'])
         kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids"]
+        for location in self.memory_locations:
+            kernel_args.append("int {}".format(location))
         if self.template_replacements['barrier'] == 1:
             kernel_args.append("__global atomic_uint* barrier")
         kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
@@ -147,7 +159,7 @@ class LitmusTest:
             if post_condition.output_type == "variable":
                 conditions.append("output[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
-                conditions.append("data[{}] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+                conditions.append("data[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
         self.template_replacements['postCondition'] = " && ".join(conditions)
 
     def spirv_code(self):

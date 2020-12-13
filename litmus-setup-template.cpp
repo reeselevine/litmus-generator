@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 
 #include <vector>
+#include <set>
 #include <string.h>
 #include <assert.h>
 #include <stdexcept>
@@ -13,6 +14,8 @@ const int numWorkgroups = {{ numWorkgroups }};
 const int workgroupSize = {{ workgroupSize }};
 const int shuffle = {{ shuffle }};
 const int barrier = {{ barrier }};
+const int testMemorySize = {{ testMemorySize }};
+const int memStride = {{ memStride }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -50,15 +53,16 @@ private:
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
 
-    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER} BufferType;
+    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, MEMORY_LOCATIONS} BufferType;
     /*
     Buffers that will be used in the compute shader.
     */
     struct BufferInfo {
         BufferType bufferType;
         VkBuffer buffer;
-        int elements; // the number of elements that the application needs
+        int size; // the size of the buffer in number of memory locations
         uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
+        uint32_t memOffset; // the offset within the allocated memory of this buffer
     };
     VkDeviceMemory bufferMemory;
     vector<BufferInfo> bufferInfos;
@@ -73,20 +77,6 @@ private:
 public:
     void run() {
         srand (time(NULL));
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[0].bufferType = TEST_DATA;
-        bufferInfos[0].elements = 4; // testing buffer 
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[1].bufferType = RESULTS;
-        bufferInfos[1].elements = {{ numOutputs }}; // output buffer
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[2].bufferType = SHUFFLE_IDS;
-        bufferInfos[2].elements = numWorkgroups * workgroupSize; // thread shuffle buffer
-        if (barrier) {
-            bufferInfos.push_back(BufferInfo());
-            bufferInfos[3].bufferType = BARRIER;
-            bufferInfos[3].elements = 1; // barrier buffer
-        }
         createInstance();
         findPhysicalDevice();
         createDevice();
@@ -96,7 +86,7 @@ public:
         createComputePipeline();
      	createCommandBuffer();
         for (int i = 0; i < 10000; i++) {
-            initializeVectors();
+            initializeBuffers();
             runCommandBuffer();
             checkResult();
 	    }
@@ -130,17 +120,30 @@ public:
         }
     }
 
-    void initializeVectors() {
+    void setMemoryLocations(uint32_t* locations, int numLocations) {
+        set<int> usedRegions;
+        int numRegions = testMemorySize / memStride;
+        for (int i = 0; i < numLocations; i++) {
+            int region = rand() % numRegions;
+            while(usedRegions.count(region))
+                region = rand() % numRegions;
+            int locInRegion = rand() % memStride;
+            locations[i] = region * memStride + locInRegion;
+            usedRegions.insert(region);
+        }
+    }
+
+    void initializeBuffers() {
         uint32_t *memory = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&memory));
         for (BufferInfo info : bufferInfos) {
             if (info.bufferType == SHUFFLE_IDS) {
-                shuffleIds(memory);
-                memory += info.requiredSize/sizeof(uint32_t);
+                shuffleIds(&memory[info.memOffset]);
+            } else if (info.bufferType == MEMORY_LOCATIONS) {
+                setMemoryLocations(&memory[info.memOffset], info.size);
             } else {
-                for (uint32_t i = 0; i < info.requiredSize/sizeof(uint32_t); i++) {
-                    *memory = 0;
-                    memory++;
+                for (uint32_t i = info.memOffset; i < info.requiredSize/sizeof(uint32_t); i++) {
+                    memory[i] = 0;
                 }
             }
         }
@@ -166,6 +169,13 @@ public:
         int32_t* data = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
         int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
+        int32_t* memLocations;
+        for (BufferInfo info : bufferInfos) {
+            if (info.bufferType == MEMORY_LOCATIONS) {
+                memLocations = data + info.memOffset;
+                break;
+            }
+        }
         if ({{ postCondition }}) {
             weakBehavior++;
         } else {
@@ -311,18 +321,41 @@ public:
     }
 
     void createBuffers() {
+        int bufferIndex = 0;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = TEST_DATA;
+        bufferInfos[bufferIndex].size = testMemorySize; // testing buffer 
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = RESULTS;
+        bufferInfos[bufferIndex].size = {{ numOutputs }}; // output buffer
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = SHUFFLE_IDS;
+        bufferInfos[bufferIndex].size = numWorkgroups * workgroupSize; // thread shuffle buffer
+        if (barrier) {
+            bufferIndex++;
+            bufferInfos.push_back(BufferInfo());
+            bufferInfos[bufferIndex].bufferType = BARRIER;
+            bufferInfos[bufferIndex].size = 1; // barrier buffer
+        }
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = MEMORY_LOCATIONS;
+        bufferInfos[bufferIndex].size = {{ numMemLocations }};
         uint32_t requiredBufferSize = 0;
 	    int i = 0;
         for (BufferInfo info : bufferInfos) {
           VkBufferCreateInfo bufferCreateInfo = {};
           bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-          bufferCreateInfo.size = info.elements * sizeof(uint32_t); // buffer size in bytes. 
+          bufferCreateInfo.size = info.size * sizeof(uint32_t); // buffer size in bytes. 
           bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
           bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
           VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &info.buffer)); // create buffer.
           VkMemoryRequirements memoryRequirements;
           vkGetBufferMemoryRequirements(device, info.buffer, &memoryRequirements);
           info.requiredSize = memoryRequirements.size;
+          info.memOffset = requiredBufferSize;
           requiredBufferSize += memoryRequirements.size;
 	      bufferInfos[i] = info;
 	      i++;
@@ -337,6 +370,7 @@ public:
             memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
         VkDeviceSize memoryOffset = 0;
+        i = 0;
         for (BufferInfo info : bufferInfos) {
           VK_CHECK_RESULT(vkBindBufferMemory(device, info.buffer, bufferMemory, memoryOffset));
           memoryOffset += info.requiredSize;
