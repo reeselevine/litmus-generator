@@ -14,8 +14,11 @@ const int numWorkgroups = {{ numWorkgroups }};
 const int workgroupSize = {{ workgroupSize }};
 const int shuffle = {{ shuffle }};
 const int barrier = {{ barrier }};
+const int numMemLocations = {{ numMemLocations }};
 const int testMemorySize = {{ testMemorySize }};
+const int scratchMemorySize = {{ scratchMemorySize }};
 const int memStride = {{ memStride }};
+const int memStress = {{ memStress }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -53,7 +56,7 @@ private:
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
 
-    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, MEMORY_LOCATIONS} BufferType;
+    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, SCRATCHPAD, SCRATCH_LOCATIONS, POD_ARGS} BufferType;
     /*
     Buffers that will be used in the compute shader.
     */
@@ -120,15 +123,23 @@ public:
         }
     }
 
-    void setMemoryLocations(uint32_t* locations, int numLocations) {
+    /** Plain old data arguments are clustered into one buffer. The order is how they appear in the kernel arguments, so positions are hardcoded here. */
+    void setPodArgs(uint32_t* podArgs) {
+        if (memStress) {
+            podArgs[0] = 1;
+        }
+        if (barrier) {
+            podArgs[1] = 1;
+        }
+        // Randomizes what locations the test threads access in the test memory. Ensures a region is only used at most once. 
         set<int> usedRegions;
         int numRegions = testMemorySize / memStride;
-        for (int i = 0; i < numLocations; i++) {
+        for (int i = 0; i < numMemLocations; i++) {
             int region = rand() % numRegions;
             while(usedRegions.count(region))
                 region = rand() % numRegions;
             int locInRegion = rand() % memStride;
-            locations[i] = region * memStride + locInRegion;
+            podArgs[i + 2] = region * memStride + locInRegion;
             usedRegions.insert(region);
         }
     }
@@ -139,8 +150,8 @@ public:
         for (BufferInfo info : bufferInfos) {
             if (info.bufferType == SHUFFLE_IDS) {
                 shuffleIds(&memory[info.memOffset]);
-            } else if (info.bufferType == MEMORY_LOCATIONS) {
-                setMemoryLocations(&memory[info.memOffset], info.size);
+            } else if (info.bufferType == POD_ARGS) {
+                setPodArgs(&memory[info.memOffset]);
             } else {
                 for (uint32_t i = info.memOffset; i < info.requiredSize/sizeof(uint32_t); i++) {
                     memory[i] = 0;
@@ -171,8 +182,8 @@ public:
         int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
         int32_t* memLocations;
         for (BufferInfo info : bufferInfos) {
-            if (info.bufferType == MEMORY_LOCATIONS) {
-                memLocations = data + info.memOffset;
+            if (info.bufferType == POD_ARGS) {
+                memLocations = data + info.memOffset + 2;
                 break;
             }
         }
@@ -333,16 +344,22 @@ public:
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SHUFFLE_IDS;
         bufferInfos[bufferIndex].size = numWorkgroups * workgroupSize; // thread shuffle buffer
-        if (barrier) {
-            bufferIndex++;
-            bufferInfos.push_back(BufferInfo());
-            bufferInfos[bufferIndex].bufferType = BARRIER;
-            bufferInfos[bufferIndex].size = 1; // barrier buffer
-        }
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = MEMORY_LOCATIONS;
-        bufferInfos[bufferIndex].size = {{ numMemLocations }};
+        bufferInfos[bufferIndex].bufferType = BARRIER;
+        bufferInfos[bufferIndex].size = 1; // barrier buffer
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = SCRATCHPAD;
+        bufferInfos[bufferIndex].size = scratchMemorySize;
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = SCRATCH_LOCATIONS;
+        bufferInfos[bufferIndex].size = numWorkgroups;
+        bufferIndex++;
+        bufferInfos.push_back(BufferInfo());
+        bufferInfos[bufferIndex].bufferType = POD_ARGS;
+        bufferInfos[bufferIndex].size = 2 + numMemLocations;
         uint32_t requiredBufferSize = 0;
 	    int i = 0;
         for (BufferInfo info : bufferInfos) {

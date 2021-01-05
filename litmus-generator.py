@@ -11,7 +11,9 @@ defaults_dict = {
     "workgroupSize": 1,
     "shuffle": 0,
     "barrier": 1,
-    "memStride": 1}
+    "memStride": 1,
+    "memStress": 1,
+    "scratchMemorySize": 1}
 
 class LitmusTest:
 
@@ -103,11 +105,10 @@ class LitmusTest:
 
     def generate_openCL_kernel(self):
         body_statements = []
+        first_thread = True
         for thread in self.threads:
             variables = set()
-            thread_statements = []
-            if self.template_replacements['barrier'] == 1:
-                thread_statements.append("spin(barrier);")
+            thread_statements = ["if (use_barrier) {", "  spin(barrier);", "}"]
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
                     variables.add(instr.variable)
@@ -115,18 +116,17 @@ class LitmusTest:
             for variable in variables:
                 thread_statements.append("atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, mo_seq_cst))
             thread_statements = ["    {}".format(statement) for statement in thread_statements]
-            body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id))] + thread_statements + ["  }"]
+            body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id, first_thread))] + thread_statements
+            first_thread = False
+        body_statements = body_statements + [self.generate_mem_stress()]
         attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['workgroupSize'])
-        kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids"]
+        kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "int mem_stress", "int use_barrier"]
         for location in self.memory_locations:
             kernel_args.append("int {}".format(location))
-        if self.template_replacements['barrier'] == 1:
-            kernel_args.append("__global atomic_uint* barrier")
         kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
         kernel = "\n".join([attribute, kernel_func_def] + body_statements + ["}\n"])
-        if self.template_replacements['barrier'] == 1:
-            spin_func = self.generate_spin()
-            kernel = "\n\n".join([spin_func, kernel])
+        spin_func = self.generate_spin()
+        kernel = "\n\n".join([spin_func, kernel])
         output_file = open(self.test_name + ".cl", "w")
         output_file.write(kernel)
         output_file.close()
@@ -144,8 +144,23 @@ class LitmusTest:
         ])
         return "\n".join([body, "}"])
 
-    def thread_filter(self, workgroup, thread=0):
-        return "if (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
+    def generate_mem_stress(self):
+        block = "\n    ".join([
+            "  } else if (mem_stress) {",
+            "  for (uint i = 0; i < 100; i++) {",
+            "    scratchpad[scratch_locations[get_group_id(0)]] = i;",
+            "    scratchpad[scratch_locations[get_group_id(0)]] = i + 1;",
+            "  }",
+            "}"
+        ])
+        return block
+
+    def thread_filter(self, workgroup, thread, first_thread):
+        if first_thread:
+            start = "if"
+        else:
+            start = "} else if"
+        return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
 
     def initialize_post_conditions(self, config):
         num_outputs = 0
