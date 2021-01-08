@@ -1,0 +1,14 @@
+{
+    "shuffle": 1, 
+    "barrier": 1,
+    "memStride": 1, 
+    "memStress": 1, 
+    "stressLineSize": 1, 
+    "stressTargetLines": 1, 
+    "stressAssignmentStrategy": "ROUND_ROBIN", 
+    "stressPattern": ["store", "store"], 
+    "stressIterations": 1000, 
+    "preStress": 1, 
+    "preStressPattern": ["store", "store"],
+    "preStressIterations": 100
+}
