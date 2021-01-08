@@ -19,6 +19,7 @@ const int testMemorySize = {{ testMemorySize }};
 const int scratchMemorySize = {{ scratchMemorySize }};
 const int memStride = {{ memStride }};
 const int memStress = {{ memStress }};
+const int preStress = {{ preStress }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
 int weakBehavior = 0;
@@ -131,7 +132,8 @@ public:
     /** Plain old data arguments are clustered into one buffer. The order is how they appear in the kernel arguments, so positions are hardcoded here. */
     void setPodArgs(uint32_t* podArgs) {
         podArgs[0] = memStress;
-        podArgs[1] = barrier;
+        podArgs[1] = preStress;
+        podArgs[2] = barrier;
         // Randomizes what locations the test threads access in the test memory. Ensures a region is only used at most once. 
         set<int> usedRegions;
         int numRegions = testMemorySize / memStride;
@@ -140,7 +142,7 @@ public:
             while(usedRegions.count(region))
                 region = rand() % numRegions;
             int locInRegion = rand() % memStride;
-            podArgs[i + 2] = region * memStride + locInRegion;
+            podArgs[i + 3] = region * memStride + locInRegion;
             usedRegions.insert(region);
         }
     }

@@ -25,18 +25,18 @@ class LitmusTest:
         # Returns the first access in the stress pattern
         stress_first_access = {
             "store": "{} = i;",
-            "load": "int tmp1 = {};"
+            "load": "uint tmp1 = {};"
         }
 
         # Given a first access, returns the second access in the stress pattern
         stress_second_access = {
             "store": {
                 "store": "{} = i + 1;",
-                "load": "int tmp1 = {};"
+                "load": "uint tmp1 = {};"
             },
             "load": {
                 "store": "{} = i;",
-                "load": "int tmp2 = {};"
+                "load": "uint tmp2 = {};"
             }
         }
 
