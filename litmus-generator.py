@@ -13,9 +13,42 @@ defaults_dict = {
     "barrier": 1,
     "memStride": 1,
     "memStress": 1,
-    "scratchMemorySize": 1}
+    "stressLineSize": 2,
+    "stressTargetLines": 1,
+    "stressAssignmentStrategy": "ROUND_ROBIN",
+    "preStress": 1}
 
 class LitmusTest:
+
+    class StressAccessPattern:
+
+        # Returns the first access in the stress pattern
+        stress_first_access = {
+            "store": "{} = i;",
+            "load": "int tmp1 = {};"
+        }
+
+        # Given a first access, returns the second access in the stress pattern
+        stress_second_access = {
+            "store": {
+                "store": "{} = i + 1;",
+                "load": "int tmp1 = {};"
+            },
+            "load": {
+                "store": "{} = i;",
+                "load": "int tmp2 = {};"
+            }
+        }
+
+        def __init__(self, pattern):
+            stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
+            self.access_pattern = [
+                self.stress_first_access[pattern[0]].format(stress_mem_location),
+                self.stress_second_access[pattern[0]][pattern[1]].format(stress_mem_location)
+            ]
+
+        def pattern(self):
+            return self.access_pattern
 
     class PostCondition:
 
@@ -53,29 +86,45 @@ class LitmusTest:
             self.local_id = local_id
             self.instructions = instructions
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, test_config, parameter_config):
+        self.test_config = test_config
+        self.parameter_config = parameter_config
         self.memory_locations = {}
         self.variables = {}
         self.threads = []
         self.post_conditions = []
-        self.test_name = config['testName']
+        self.test_name = test_config['testName']
         self.template_replacements = {}
-        self.initialize_threads(config)
-        self.initialize_post_conditions(config)
-        self.initialize_template_replacements(config)
+        self.initialize_template_replacements()
+        self.initialize_threads()
+        self.initialize_post_conditions()
+        self.initialize_stress_settings()
 
-    def initialize_template_replacements(self, config):
+    # Code below this line initializes settings
+
+    def initialize_stress_settings(self):
+        min_size = self.template_replacements['stressLineSize'] * self.template_replacements['stressTargetLines']
+        if 'scratchMemorySize' in self.parameter_config:
+            if self.parameter_config['scratchMemorySize'] < min_size:
+                raise Exception("scratch memory too small")
+            else:
+                self.template_replacements['scratchMemorySize'] = self.parameter_config['scratchMemorySize']
+        else:
+            self.template_replacements['scratchMemorySize'] = min_size
+        self.pre_stress_pattern = self.StressAccessPattern(self.parameter_config["preStressPattern"])
+        self.stress_pattern = self.StressAccessPattern(self.parameter_config["stressPattern"])
+
+    def initialize_template_replacements(self):
         for key in defaults_dict:
-            if key in config:
-                self.template_replacements[key] = config[key]
+            if key in self.parameter_config:
+                self.template_replacements[key] = self.parameter_config[key]
             else:
                 self.template_replacements[key] = defaults_dict[key]
 
-    def initialize_threads(self, config):
+    def initialize_threads(self):
         mem_loc = 0
         variable_output = 0
-        for thread in config['threads']:
+        for thread in self.test_config['threads']:
             instructions = []
             for instruction in thread['actions']:
                 if instruction['memoryLocation'] not in self.memory_locations:
@@ -93,11 +142,32 @@ class LitmusTest:
             else:
                 local_id = DEFAULT_LOCAL_ID
             self.threads.append(self.Thread(thread['workgroup'], local_id, instructions))
-        if 'testMemorySize' in config:
-            self.template_replacements['testMemorySize'] = config['testMemorySize']
+        min_test_memory_size = self.template_replacements['memStride'] * len(self.memory_locations)
+        if 'testMemorySize' in self.parameter_config:
+            if self.parameter_config['testMemorySize'] < min_test_memory_size:
+                raise Exception("test memory too small")
+            else:
+                self.template_replacements['testMemorySize'] = self.parameter_config['testMemorySize']
         else:
-            self.template_replacements['testMemorySize'] = len(self.memory_locations)
+            self.template_replacements['testMemorySize'] = min_test_memory_size
         self.template_replacements['numMemLocations'] = len(self.memory_locations)
+
+    def initialize_post_conditions(self):
+        num_outputs = 0
+        for post_condition in self.test_config['postConditions']:
+            if post_condition['type'] == "variable":
+                num_outputs += 1
+            self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
+        self.template_replacements['numOutputs'] = num_outputs
+        conditions = []
+        for post_condition in self.post_conditions:
+            if post_condition.output_type == "variable":
+                conditions.append("output[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
+            elif post_condition.output_type == "memory":
+                conditions.append("data[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+        self.template_replacements['postCondition'] = " && ".join(conditions)
+
+    # Code below this line generates the actual opencl kernel and vulkan code
 
     def generate(self):
         self.generate_openCL_kernel()
@@ -108,7 +178,12 @@ class LitmusTest:
         first_thread = True
         for thread in self.threads:
             variables = set()
-            thread_statements = ["if (use_barrier) {", "  spin(barrier);", "}"]
+            thread_statements = [
+                "if (pre_stress) {",
+                "  for (uint i = 0; i < {}; i++) {{".format(self.parameter_config["preStressIterations"])
+            ]
+            thread_statements = thread_statements + ["    {}".format(statement) for statement in self.pre_stress_pattern.pattern()]
+            thread_statements = thread_statements + ["  }", "}", "if (use_barrier) {", "  spin(barrier);", "}"]
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
                     variables.add(instr.variable)
@@ -120,7 +195,7 @@ class LitmusTest:
             first_thread = False
         body_statements = body_statements + [self.generate_mem_stress()]
         attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['workgroupSize'])
-        kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "int mem_stress", "int use_barrier"]
+        kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "int mem_stress", "int pre_stress", "int use_barrier"]
         for location in self.memory_locations:
             kernel_args.append("int {}".format(location))
         kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
@@ -145,15 +220,13 @@ class LitmusTest:
         return "\n".join([body, "}"])
 
     def generate_mem_stress(self):
-        block = "\n    ".join([
+        block = [
             "  } else if (mem_stress) {",
-            "  for (uint i = 0; i < 100; i++) {",
-            "    scratchpad[scratch_locations[get_group_id(0)]] = i;",
-            "    scratchpad[scratch_locations[get_group_id(0)]] = i + 1;",
-            "  }",
-            "}"
-        ])
-        return block
+            "  for (uint i = 0; i < {}; i++) {{".format(self.parameter_config["stressIterations"])
+        ]
+        block = block + ["    {}".format(statement) for statement in self.stress_pattern.pattern()]
+        block = block + ["  }", "}"]
+        return "\n    ".join(block)
 
     def thread_filter(self, workgroup, thread, first_thread):
         if first_thread:
@@ -161,21 +234,6 @@ class LitmusTest:
         else:
             start = "} else if"
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
-
-    def initialize_post_conditions(self, config):
-        num_outputs = 0
-        for post_condition in config['postConditions']:
-            if post_condition['type'] == "variable":
-                num_outputs += 1
-            self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
-        self.template_replacements['numOutputs'] = num_outputs
-        conditions = []
-        for post_condition in self.post_conditions:
-            if post_condition.output_type == "variable":
-                conditions.append("output[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
-            elif post_condition.output_type == "memory":
-                conditions.append("data[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
-        self.template_replacements['postCondition'] = " && ".join(conditions)
 
     def spirv_code(self):
         spirv_output = subprocess.check_output(["/home/tyler/Documents/clspv/alan_clspv/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points","-mfmt=c", self.test_name + ".cl", "-o",  "-"])
@@ -196,10 +254,13 @@ class LitmusTest:
         output_file.close()
 
 def main(argv):
-    config_file_name = argv[1]
-    config_file = open(config_file_name, "r")
-    litmus_test_config = json.loads(config_file.read())
-    litmus_test = LitmusTest(litmus_test_config)
+    test_config_file_name = argv[1]
+    parameter_config_file_name = argv[2]
+    test_config_file = open(test_config_file_name, "r")
+    parameter_config_file = open(parameter_config_file_name, "r")
+    test_config = json.loads(test_config_file.read())
+    parameter_config = json.loads(parameter_config_file.read())
+    litmus_test = LitmusTest(test_config, parameter_config)
     litmus_test.generate()
 
 if __name__ == '__main__':

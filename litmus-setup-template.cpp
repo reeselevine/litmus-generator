@@ -19,6 +19,8 @@ const int testMemorySize = {{ testMemorySize }};
 const int scratchMemorySize = {{ scratchMemorySize }};
 const int memStride = {{ memStride }};
 const int memStress = {{ memStress }};
+const int stressLineSize = {{ stressLineSize }};
+const int stressTargetLines = {{ stressTargetLines }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -55,6 +57,9 @@ private:
     VkDescriptorPool descriptorPool;
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
+
+    typedef enum StressAssignmentStrategy {ROUND_ROBIN, CHUNKING} StressAssignmentStrategy;
+    StressAssignmentStrategy stressAssignmentStrategy = {{ stressAssignmentStrategy }};
 
     typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, SCRATCHPAD, SCRATCH_LOCATIONS, POD_ARGS} BufferType;
     /*
@@ -125,12 +130,8 @@ public:
 
     /** Plain old data arguments are clustered into one buffer. The order is how they appear in the kernel arguments, so positions are hardcoded here. */
     void setPodArgs(uint32_t* podArgs) {
-        if (memStress) {
-            podArgs[0] = 1;
-        }
-        if (barrier) {
-            podArgs[1] = 1;
-        }
+        podArgs[0] = memStress;
+        podArgs[1] = barrier;
         // Randomizes what locations the test threads access in the test memory. Ensures a region is only used at most once. 
         set<int> usedRegions;
         int numRegions = testMemorySize / memStride;
@@ -141,6 +142,38 @@ public:
             int locInRegion = rand() % memStride;
             podArgs[i + 2] = region * memStride + locInRegion;
             usedRegions.insert(region);
+        }
+    }
+
+    /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
+     * workgroups to specific stress locations. 
+     */
+    void setStressLocations(uint32_t* scratchLocations) {
+        set <int> usedRegions;
+        int numRegions = scratchMemorySize / stressLineSize;
+        for (int i = 0; i < stressTargetLines; i++) {
+            int region = rand() % numRegions;
+            while(usedRegions.count(region))
+                region = rand() % numRegions;
+            int locInRegion = rand() % memStride;
+            switch (stressAssignmentStrategy) {
+                case ROUND_ROBIN:
+                    for (int j = i; j < numWorkgroups; j += stressTargetLines) {
+                        scratchLocations[j] = region * stressLineSize + locInRegion;
+                    }
+                    break;
+                case CHUNKING:
+                    int workgroupsPerLocation = numWorkgroups/stressTargetLines;
+                    for (int j = 0; j < workgroupsPerLocation; j++) {
+                        scratchLocations[i*workgroupsPerLocation + j] = region * stressLineSize + locInRegion;
+                    }
+                    if (i == stressTargetLines - 1 && numWorkgroups % stressTargetLines != 0) {
+                        for (int j = 0; j < numWorkgroups % stressTargetLines; j++) {
+                            scratchLocations[numWorkgroups - j - 1] = region * stressLineSize + locInRegion;
+                        }
+                    }
+                    break;
+            }
         }
     }
 
@@ -351,11 +384,12 @@ public:
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SCRATCHPAD;
-        bufferInfos[bufferIndex].size = scratchMemorySize;
+        bufferInfos[bufferIndex].size = scratchMemorySize; // scratch (stress) memory
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SCRATCH_LOCATIONS;
-        bufferInfos[bufferIndex].size = numWorkgroups;
+        // TODO: make this the max workgroup number
+        bufferInfos[bufferIndex].size = numWorkgroups;  // The location in the scratch memory for each workgroup to stress
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = POD_ARGS;
