@@ -10,6 +10,7 @@
 #include <time.h>
 using namespace std;
 
+const int NUM_POD_ARGS = 3;
 const int numWorkgroups = {{ numWorkgroups }};
 const int workgroupSize = {{ workgroupSize }};
 const int shuffle = {{ shuffle }};
@@ -109,16 +110,20 @@ public:
         }
         if (shuffle) {
             // shuffle workgroups
-            for (int i = numWorkgroups - 1; i > 0; i--) {
+            for (int i = numWorkgroups - 1; i >= 0; i--) {
                 int x = rand() % (i + 1);
                 if (workgroupSize > 1) {
                     // swap and shuffle invocations within a workgroup
+                    for (int j = 0; j < workgroupSize; j++) {
+                        uint32_t temp = ids[i*workgroupSize + j];
+                        ids[i*workgroupSize + j] = ids[x*workgroupSize + j];
+                        ids[x*workgroupSize + j] = temp;
+                    }
                     for (int j = workgroupSize - 1; j > 0; j--) {
                         int y = rand() % (j + 1);
-                        int z = rand() % (j + 1);
                         uint32_t temp = ids[i * workgroupSize + y];
-                        ids[i * workgroupSize + y] = ids[shuffle * workgroupSize + z];
-                        ids[x * workgroupSize + z] = temp;
+                        ids[i * workgroupSize + y] = ids[i * workgroupSize + j];
+                        ids[i * workgroupSize + j] = temp;
                     }
                 } else {
                     uint32_t temp = ids[i];
@@ -142,7 +147,7 @@ public:
             while(usedRegions.count(region))
                 region = rand() % numRegions;
             int locInRegion = rand() % memStride;
-            podArgs[i + 3] = region * memStride + locInRegion;
+            podArgs[i + NUM_POD_ARGS] = region * memStride + locInRegion;
             usedRegions.insert(region);
         }
     }
@@ -150,7 +155,7 @@ public:
     /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
      * workgroups to specific stress locations. 
      */
-    void setStressLocations(uint32_t* scratchLocations) {
+    void setScratchLocations(uint32_t* scratchLocations) {
         set <int> usedRegions;
         int numRegions = scratchMemorySize / stressLineSize;
         for (int i = 0; i < stressTargetLines; i++) {
@@ -183,14 +188,47 @@ public:
         uint32_t *memory = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&memory));
         for (BufferInfo info : bufferInfos) {
-            if (info.bufferType == SHUFFLE_IDS) {
-                shuffleIds(&memory[info.memOffset]);
-            } else if (info.bufferType == POD_ARGS) {
-                setPodArgs(&memory[info.memOffset]);
-            } else {
-                for (uint32_t i = info.memOffset; i < info.requiredSize/sizeof(uint32_t); i++) {
-                    memory[i] = 0;
-                }
+            switch(info.bufferType) {
+                case SHUFFLE_IDS:
+                    shuffleIds(&memory[info.memOffset]);
+                    printf("Shuffled Thread Ids: [");
+                    for (uint i = 0; i < info.size; i++) {
+                        printf("%u, ", memory[info.memOffset + i]);
+                    }
+                    printf("]\n");
+                    break;
+                case SCRATCH_LOCATIONS:
+                    setScratchLocations(&memory[info.memOffset]);
+                    printf("Stressing threads test locations: [");
+                    for (uint i = 0; i < info.size; i++) {
+                        printf("%u, ", memory[info.memOffset + i]);
+                    }
+                    printf("]\n");
+                    break;
+                case POD_ARGS:
+                    setPodArgs(&memory[info.memOffset]);
+                    printf("Memory Stress: %u, ", memory[info.memOffset]);
+                    printf("Pre stress: %u, ", memory[info.memOffset + 1]);
+                    printf("Barrier: %u\n", memory[info.memOffset + 2]);
+                    printf("Memory locations: [");
+                    for (uint i = 0; i < numMemLocations; i++) {
+                        printf("%u, ", memory[info.memOffset + 3 + i]);
+                    }
+                    printf("]\n");
+                    break;
+                case BARRIER:
+                    printf("Barrier: %u\n", memory[info.memOffset]);
+                    for (uint32_t i = info.memOffset; i < info.memOffset + info.size; i++) {
+                        memory[i] = 0;
+                    }
+                    break;
+                case RESULTS:
+                    printf("memory offset: %u\n", info.memOffset);
+                    printf("r0 output: %u, r1 output: %u\n", memory[info.memOffset], memory[info.memOffset + 1]);
+                default:
+                    for (uint32_t i = info.memOffset; i < info.memOffset + info.size; i++) {
+                        memory[i] = 0;
+                    }
             }
         }
         vkUnmapMemory(device, bufferMemory);
@@ -218,7 +256,7 @@ public:
         int32_t* memLocations;
         for (BufferInfo info : bufferInfos) {
             if (info.bufferType == POD_ARGS) {
-                memLocations = data + info.memOffset + 2;
+                memLocations = data + info.memOffset + NUM_POD_ARGS;
                 break;
             }
         }
@@ -395,7 +433,7 @@ public:
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = POD_ARGS;
-        bufferInfos[bufferIndex].size = 2 + numMemLocations;
+        bufferInfos[bufferIndex].size = NUM_POD_ARGS + numMemLocations;
         uint32_t requiredBufferSize = 0;
 	    int i = 0;
         for (BufferInfo info : bufferInfos) {
@@ -408,7 +446,7 @@ public:
           VkMemoryRequirements memoryRequirements;
           vkGetBufferMemoryRequirements(device, info.buffer, &memoryRequirements);
           info.requiredSize = memoryRequirements.size;
-          info.memOffset = requiredBufferSize;
+          info.memOffset = requiredBufferSize/sizeof(uint32_t);
           requiredBufferSize += memoryRequirements.size;
 	      bufferInfos[i] = info;
 	      i++;
