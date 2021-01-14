@@ -63,19 +63,22 @@ private:
     typedef enum StressAssignmentStrategy {ROUND_ROBIN, CHUNKING} StressAssignmentStrategy;
     StressAssignmentStrategy stressAssignmentStrategy = {{ stressAssignmentStrategy }};
 
-    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, SCRATCHPAD, SCRATCH_LOCATIONS, POD_ARGS} BufferType;
+    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, SCRATCHPAD, SCRATCH_LOCATIONS} BufferType;
     /*
     Buffers that will be used in the compute shader.
     */
     struct BufferInfo {
         BufferType bufferType;
         VkBuffer buffer;
-        int size; // the size of the buffer in number of memory locations
+        int size; // the size of the buffer in bytes
         uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
         uint32_t memOffset; // the offset within the allocated memory of this buffer
     };
     VkDeviceMemory bufferMemory;
     vector<BufferInfo> bufferInfos;
+
+    /** Array used to  update plain old data arguments in the kernel. */
+    uint32_t podArgs[NUM_POD_ARGS + numMemLocations];
         
     vector<const char *> enabledLayers;
 
@@ -135,7 +138,7 @@ public:
     }
 
     /** Plain old data arguments are clustered into one buffer. The order is how they appear in the kernel arguments, so positions are hardcoded here. */
-    void setPodArgs(uint32_t* podArgs) {
+    void setPodArgs() {
         podArgs[0] = memStress;
         podArgs[1] = preStress;
         podArgs[2] = barrier;
@@ -146,8 +149,8 @@ public:
             int region = rand() % numRegions;
             while(usedRegions.count(region))
                 region = rand() % numRegions;
-            int locInRegion = rand() % memStride;
-            podArgs[i + NUM_POD_ARGS] = region * memStride + locInRegion;
+            int locInRegion = rand() % (memStride/sizeof(uint32_t));
+            podArgs[i + NUM_POD_ARGS] = (region * memStride)/sizeof(uint32_t) + locInRegion;
             usedRegions.insert(region);
         }
     }
@@ -162,21 +165,21 @@ public:
             int region = rand() % numRegions;
             while(usedRegions.count(region))
                 region = rand() % numRegions;
-            int locInRegion = rand() % memStride;
+            int locInRegion = rand() % (stressLineSize/sizeof(uint32_t));
             switch (stressAssignmentStrategy) {
                 case ROUND_ROBIN:
                     for (int j = i; j < numWorkgroups; j += stressTargetLines) {
-                        scratchLocations[j] = region * stressLineSize + locInRegion;
+                        scratchLocations[j] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
                     }
                     break;
                 case CHUNKING:
                     int workgroupsPerLocation = numWorkgroups/stressTargetLines;
                     for (int j = 0; j < workgroupsPerLocation; j++) {
-                        scratchLocations[i*workgroupsPerLocation + j] = region * stressLineSize + locInRegion;
+                        scratchLocations[i*workgroupsPerLocation + j] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
                     }
                     if (i == stressTargetLines - 1 && numWorkgroups % stressTargetLines != 0) {
                         for (int j = 0; j < numWorkgroups % stressTargetLines; j++) {
-                            scratchLocations[numWorkgroups - j - 1] = region * stressLineSize + locInRegion;
+                            scratchLocations[numWorkgroups - j - 1] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
                         }
                     }
                     break;
@@ -191,42 +194,12 @@ public:
             switch(info.bufferType) {
                 case SHUFFLE_IDS:
                     shuffleIds(&memory[info.memOffset]);
-                    printf("Shuffled Thread Ids: [");
-                    for (uint i = 0; i < info.size; i++) {
-                        printf("%u, ", memory[info.memOffset + i]);
-                    }
-                    printf("]\n");
                     break;
                 case SCRATCH_LOCATIONS:
                     setScratchLocations(&memory[info.memOffset]);
-                    printf("Stressing threads test locations: [");
-                    for (uint i = 0; i < info.size; i++) {
-                        printf("%u, ", memory[info.memOffset + i]);
-                    }
-                    printf("]\n");
                     break;
-                case POD_ARGS:
-                    setPodArgs(&memory[info.memOffset]);
-                    printf("Memory Stress: %u, ", memory[info.memOffset]);
-                    printf("Pre stress: %u, ", memory[info.memOffset + 1]);
-                    printf("Barrier: %u\n", memory[info.memOffset + 2]);
-                    printf("Memory locations: [");
-                    for (uint i = 0; i < numMemLocations; i++) {
-                        printf("%u, ", memory[info.memOffset + 3 + i]);
-                    }
-                    printf("]\n");
-                    break;
-                case BARRIER:
-                    printf("Barrier: %u\n", memory[info.memOffset]);
-                    for (uint32_t i = info.memOffset; i < info.memOffset + info.size; i++) {
-                        memory[i] = 0;
-                    }
-                    break;
-                case RESULTS:
-                    printf("memory offset: %u\n", info.memOffset);
-                    printf("r0 output: %u, r1 output: %u\n", memory[info.memOffset], memory[info.memOffset + 1]);
                 default:
-                    for (uint32_t i = info.memOffset; i < info.memOffset + info.size; i++) {
+                    for (uint32_t i = info.memOffset; i < info.memOffset + (info.size)/sizeof(uint32_t); i++) {
                         memory[i] = 0;
                     }
             }
@@ -253,13 +226,7 @@ public:
         int32_t* data = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
         int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
-        int32_t* memLocations;
-        for (BufferInfo info : bufferInfos) {
-            if (info.bufferType == POD_ARGS) {
-                memLocations = data + info.memOffset + NUM_POD_ARGS;
-                break;
-            }
-        }
+        uint32_t* memLocations = &podArgs[3];
         if ({{ postCondition }}) {
             weakBehavior++;
         } else {
@@ -412,15 +379,15 @@ public:
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = RESULTS;
-        bufferInfos[bufferIndex].size = {{ numOutputs }}; // output buffer
+        bufferInfos[bufferIndex].size = {{ numOutputs }} * sizeof(uint32_t); // output buffer
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SHUFFLE_IDS;
-        bufferInfos[bufferIndex].size = numWorkgroups * workgroupSize; // thread shuffle buffer
+        bufferInfos[bufferIndex].size = numWorkgroups * workgroupSize * sizeof(uint32_t); // thread shuffle buffer
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = BARRIER;
-        bufferInfos[bufferIndex].size = 1; // barrier buffer
+        bufferInfos[bufferIndex].size = sizeof(uint32_t); // barrier buffer
         bufferIndex++;
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SCRATCHPAD;
@@ -429,17 +396,13 @@ public:
         bufferInfos.push_back(BufferInfo());
         bufferInfos[bufferIndex].bufferType = SCRATCH_LOCATIONS;
         // TODO: make this the max workgroup number
-        bufferInfos[bufferIndex].size = numWorkgroups;  // The location in the scratch memory for each workgroup to stress
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = POD_ARGS;
-        bufferInfos[bufferIndex].size = NUM_POD_ARGS + numMemLocations;
+        bufferInfos[bufferIndex].size = numWorkgroups*sizeof(uint32_t);  // The location in the scratch memory for each workgroup to stress
         uint32_t requiredBufferSize = 0;
 	    int i = 0;
         for (BufferInfo info : bufferInfos) {
           VkBufferCreateInfo bufferCreateInfo = {};
           bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-          bufferCreateInfo.size = info.size * sizeof(uint32_t); // buffer size in bytes. 
+          bufferCreateInfo.size = info.size; // buffer size in bytes. 
           bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
           bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
           VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &info.buffer)); // create buffer.
@@ -537,6 +500,18 @@ public:
         shaderStageCreateInfo.module = computeShaderModule;
         shaderStageCreateInfo.pName = "litmus_test";
 
+        VkSpecializationMapEntry specMapEntries[1];
+        specMapEntries[0].constantID = 0;
+        specMapEntries[0].offset = 0;
+        specMapEntries[0].size = 4;
+        uint32_t specMapContent[] = {workgroupSize};
+        VkSpecializationInfo specInfo;
+        specInfo.mapEntryCount = 1;
+        specInfo.pMapEntries = specMapEntries;
+        specInfo.dataSize = 4;
+        specInfo.pData = specMapContent;
+        shaderStageCreateInfo.pSpecializationInfo = &specInfo;
+
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
         pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutCreateInfo.setLayoutCount = 1;
@@ -573,6 +548,10 @@ public:
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+
+        setPodArgs();
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 32, (NUM_POD_ARGS + numMemLocations)*sizeof(uint32_t), podArgs);
+
         vkCmdDispatch(commandBuffer, numWorkgroups, 1, 1);
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
     }

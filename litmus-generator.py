@@ -194,12 +194,11 @@ class LitmusTest:
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id, first_thread))] + thread_statements
             first_thread = False
         body_statements = body_statements + [self.generate_mem_stress()]
-        attribute = "__attribute__ ((reqd_work_group_size({}, 1, 1)))".format(self.template_replacements['workgroupSize'])
         kernel_args = ["__global atomic_uint* test_data", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "int mem_stress", "int pre_stress", "int use_barrier"]
         for location in self.memory_locations:
             kernel_args.append("int {}".format(location))
         kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
-        kernel = "\n".join([attribute, kernel_func_def] + body_statements + ["}\n"])
+        kernel = "\n".join([kernel_func_def] + body_statements + ["}\n"])
         spin_func = self.generate_spin()
         kernel = "\n\n".join([spin_func, kernel])
         output_file = open(self.test_name + ".cl", "w")
