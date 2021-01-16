@@ -69,7 +69,7 @@ class LitmusTest:
             self.variable = variable
 
         def openCL_repr(self):
-            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.variable, self.mem_loc, mo_relaxed)
+            return "uint {} = atomic_load_explicit(&test_data[mem_locations[{}]], {});".format(self.variable, self.mem_loc, mo_relaxed)
 
     class WriteInstruction(Instruction):
 
@@ -78,7 +78,7 @@ class LitmusTest:
             self.value = value
 
         def openCL_repr(self):
-            return "atomic_store_explicit(&test_data[{}], {}, {});".format(self.mem_loc, self.value, mo_relaxed)
+            return "atomic_store_explicit(&test_data[mem_locations[{}]], {}, {});".format(self.mem_loc, self.value, mo_relaxed)
 
     class Thread:
         def __init__(self, workgroup, local_id, instructions):
@@ -95,6 +95,7 @@ class LitmusTest:
         self.post_conditions = []
         self.test_name = test_config['testName']
         self.template_replacements = {}
+        self.template_replacements['testName'] = self.test_name
         self.initialize_template_replacements()
         self.initialize_threads()
         self.initialize_post_conditions()
@@ -134,9 +135,9 @@ class LitmusTest:
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
                         variable_output += 1
-                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable']))
+                    instructions.append(self.ReadInstruction(self.memory_locations[instruction['memoryLocation']], instruction['variable']))
                 if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value']))
+                    instructions.append(self.WriteInstruction(self.memory_locations[instruction['memoryLocation']], instruction['value']))
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
@@ -162,9 +163,9 @@ class LitmusTest:
         conditions = []
         for post_condition in self.post_conditions:
             if post_condition.output_type == "variable":
-                conditions.append("output[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
+                conditions.append("hostResults[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
-                conditions.append("data[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+                conditions.append("hostTestData[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
         self.template_replacements['postCondition'] = " && ".join(conditions)
 
     # Code below this line generates the actual opencl kernel and vulkan code
@@ -235,7 +236,7 @@ class LitmusTest:
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
 
     def spirv_code(self):
-        spirv_output = subprocess.check_output(["/home/tyler/Documents/clspv/alan_clspv/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points","-mfmt=c", self.test_name + ".cl", "-o",  "-"])
+        spirv_output = subprocess.check_output(["/shared/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points", self.test_name + ".cl", "-o",  self.test_name + ".spv"])
         decoded_spirv = spirv_output.decode().replace("\n", "")
         spirv_length = decoded_spirv.count(",") + 1
         self.template_replacements["shaderCode"] = spirv_output.decode().replace("\n", "")

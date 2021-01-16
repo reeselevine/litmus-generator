@@ -15,6 +15,7 @@ const int memStress = {{ memStress }};
 const int preStress = {{ preStress }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
+const char* testName = {{ testName }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
@@ -49,7 +50,7 @@ class LitmusTester {
         auto scratchpad = vuh::Array<uint32_t>(device, scratchMemorySize/sizeof(uint32_t));
         auto scratchLocations = vuh::Array<uint32_t>(device, numWorkgroups);
         using SpecConstants = vuh::typelist<uint32_t>;
-        auto program = vuh::Program<SpecConstants, PushConstants>(device, "load-buffer.spv");
+        auto program = vuh::Program<SpecConstants, PushConstants>(device, testName);
 
         // initialize and run program
         clearMemory(testData, testMemorySize/sizeof(uint32_t));
@@ -64,11 +65,13 @@ class LitmusTester {
         int _numWorkgroups = setNumWorkgroups();
 
         program.grid(_numWorkgroups).spec(_workgroupSize)(pushConstants, testData, results, shuffleIds, barrier, scratchpad, scratchLocations);
+        checkResult(testData, results, pushConstants);
     }
 
-    void checkResult(vuh::Array testData, vuh:Array results) {
+    void checkResult(vuh::Array testData, vuh:Array results, PushConstants constants) {
         auto hostTestData = std::vector<uint32_t>(testMemorySize/sizeof(uint32_t), 0);
         auto hostResults = std::vector<uint32_t>(numOutputs, 0);
+        auto memLocations = constants.memLocations;
         testData.toHost(hostTestData.begin());
         results.toHost(hostResults.begin());
         if ({{ postCondition }}) {
