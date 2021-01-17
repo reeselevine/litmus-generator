@@ -180,11 +180,11 @@ class LitmusTest:
         for thread in self.threads:
             variables = set()
             thread_statements = [
-                "if (pre_stress) {",
+                "if (stress_params[1]) {",
                 "  for (uint i = 0; i < {}; i++) {{".format(self.parameter_config["preStressIterations"])
             ]
             thread_statements = thread_statements + ["    {}".format(statement) for statement in self.pre_stress_pattern.pattern()]
-            thread_statements = thread_statements + ["  }", "}", "if (use_barrier) {", "  spin(barrier);", "}"]
+            thread_statements = thread_statements + ["  }", "}", "if (stress_params[2]) {", "  spin(barrier);", "}"]
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
                     variables.add(instr.variable)
@@ -195,7 +195,7 @@ class LitmusTest:
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id, first_thread))] + thread_statements
             first_thread = False
         body_statements = body_statements + [self.generate_mem_stress()]
-        kernel_args = ["__global atomic_uint* test_data", "__global uint* mem_locations", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "int mem_stress", "int pre_stress", "int use_barrier"]
+        kernel_args = ["__global atomic_uint* test_data", "__global uint* mem_locations", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "__global uint* stress_params"]
         kernel_func_def = "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"
         kernel = "\n".join([kernel_func_def] + body_statements + ["}\n"])
         spin_func = self.generate_spin()
@@ -219,7 +219,7 @@ class LitmusTest:
 
     def generate_mem_stress(self):
         block = [
-            "  } else if (mem_stress) {",
+            "  } else if (stress_params[0]) {",
             "  for (uint i = 0; i < {}; i++) {{".format(self.parameter_config["stressIterations"])
         ]
         block = block + ["    {}".format(statement) for statement in self.stress_pattern.pattern()]
