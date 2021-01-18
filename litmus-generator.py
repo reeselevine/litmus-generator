@@ -16,7 +16,9 @@ defaults_dict = {
     "stressLineSize": 2,
     "stressTargetLines": 1,
     "stressAssignmentStrategy": "ROUND_ROBIN",
-    "preStress": 1}
+    "preStress": 1,
+    "testIterations": 10000
+}
 
 class LitmusTest:
 

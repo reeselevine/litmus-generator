@@ -46,24 +46,24 @@ public:
 	testFile = testFile + ".spv";
         auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
 
-        // initialize and run program
-        clearMemory(testData, testMemorySize/sizeof(uint32_t));
-	setMemLocations(memLocations);
-        clearMemory(results, numOutputs);
-        setShuffleIds(shuffleIds);
-        clearMemory(barrier, 1);
-        clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
-        setScratchLocations(scratchLocations);
-	setStressParams(stressParams);
+	for (int i = 0; i < {{ testIterations }}; i++) {
 
-        int _workgroupSize = setWorkgroupSize();
-        int _numWorkgroups = setNumWorkgroups();
+            // initialize and run program
+            clearMemory(testData, testMemorySize/sizeof(uint32_t));
+	    setMemLocations(memLocations);
+            clearMemory(results, numOutputs);
+            setShuffleIds(shuffleIds);
+            clearMemory(barrier, 1);
+            clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
+            setScratchLocations(scratchLocations);
+	    setStressParams(stressParams);
 
-        program.grid(_numWorkgroups);
-	program.spec(_workgroupSize);
-	program.bind(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
-	program.run();
-        checkResult(testData, results, memLocations);
+            int _workgroupSize = setWorkgroupSize();
+            int _numWorkgroups = setNumWorkgroups();
+
+            program.grid(_numWorkgroups).spec(_workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
+            checkResult(testData, results, memLocations);
+	}
     }
 
     void checkResult(Array &testData, Array &results, Array &memLocations) {
