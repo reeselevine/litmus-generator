@@ -235,7 +235,7 @@ class LitmusTest:
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
 
     def spirv_code(self):
-        spirv_output = subprocess.check_output(["/home/tyler/Documents/clspv/alan_clspv/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points","-mfmt=c", self.test_name + ".cl", "-o",  "-"])
+        spirv_output = subprocess.check_output(["/shared/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points","-mfmt=c", self.test_name + ".cl", "-o",  "-"])
         decoded_spirv = spirv_output.decode().replace("\n", "")
         spirv_length = decoded_spirv.count(",") + 1
         self.template_replacements["shaderCode"] = spirv_output.decode().replace("\n", "")

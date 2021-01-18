@@ -315,7 +315,8 @@ public:
         for (VkPhysicalDevice device : devices) {
 	    VkPhysicalDeviceProperties properties;
 	    vkGetPhysicalDeviceProperties(device, &properties);
-            if (properties.deviceID == 4935) { // We want the nvidia gpu on this server.
+	    printf("device id: %u\n", properties.deviceID);
+            if (properties.deviceID == 7857) { // We want the nvidia gpu on this server.
                 physicalDevice = device;
             }
         }
