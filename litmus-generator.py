@@ -71,7 +71,7 @@ class LitmusTest:
             self.variable = variable
 
         def openCL_repr(self):
-            return "uint {} = atomic_load_explicit(&test_data[mem_locations[{}]], {});".format(self.variable, self.mem_loc, mo_relaxed)
+            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.variable, self.mem_loc, mo_relaxed)
 
     class WriteInstruction(Instruction):
 
@@ -80,7 +80,7 @@ class LitmusTest:
             self.value = value
 
         def openCL_repr(self):
-            return "atomic_store_explicit(&test_data[mem_locations[{}]], {}, {});".format(self.mem_loc, self.value, mo_relaxed)
+            return "atomic_store_explicit(&test_data[{}], {}, {});".format(self.mem_loc, self.value, mo_relaxed)
 
     class Thread:
         def __init__(self, workgroup, local_id, instructions):
@@ -137,9 +137,9 @@ class LitmusTest:
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
                         variable_output += 1
-                    instructions.append(self.ReadInstruction(self.memory_locations[instruction['memoryLocation']], instruction['variable']))
+                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable']))
                 if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(self.memory_locations[instruction['memoryLocation']], instruction['value']))
+                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value']))
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
@@ -161,13 +161,19 @@ class LitmusTest:
             if post_condition['type'] == "variable":
                 num_outputs += 1
             self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
-        self.template_replacements['numOutputs'] = num_outputs
+        self.template_replacements['numOutputs'] = max(num_outputs, 1)
         conditions = []
+        sample_ids = []
+        sample_values = []
         for post_condition in self.post_conditions:
+            sample_ids.append("{}: %u".format(post_condition.identifier))
             if post_condition.output_type == "variable":
-                conditions.append("hostResults[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
+                sample_values.append("results[{}]".format(self.variables[post_condition.identifier]))
+                conditions.append("results[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
-                conditions.append("hostTestData[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+                sample_values.append("testData[memLocations[{}]]".format(self.memory_locations[post_condition.identifier]))
+                conditions.append("testData[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+        self.template_replacements['postConditionSample'] = """printf("{}\\n", {});""".format(", ".join(sample_ids), ",".join(sample_values))
         self.template_replacements['postCondition'] = " && ".join(conditions)
 
     # Code below this line generates the actual opencl kernel and vulkan code
@@ -179,6 +185,9 @@ class LitmusTest:
     def generate_openCL_kernel(self):
         body_statements = []
         first_thread = True
+        variable_initializations = []
+        for variable, mem_loc in self.memory_locations.items():
+           body_statements.append("  const uint {} = mem_locations[{}];".format(variable, mem_loc))
         for thread in self.threads:
             variables = set()
             thread_statements = [
@@ -212,7 +221,7 @@ class LitmusTest:
             header,
             "int i = 0;",
             "uint val = atomic_fetch_add_explicit(barrier, 1, memory_order_relaxed);",
-            "while (i < 1000 && val < {}) {{".format(len(self.threads)),
+            "while (val < {}) {{".format(len(self.threads)),
             "  val = atomic_load_explicit(barrier, memory_order_relaxed);",
             "  i++;",
             "}"

@@ -21,7 +21,7 @@ const char* testName = "{{ testName }}";
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
-using Array = vuh::Array<uint32_t>;
+using Array = vuh::Array<uint32_t,vuh::mem::HostCoherent>;
 class LitmusTester {
 
 private:
@@ -67,12 +67,9 @@ public:
     }
 
     void checkResult(Array &testData, Array &results, Array &memLocations) {
-        auto hostTestData = std::vector<uint32_t>(testMemorySize/sizeof(uint32_t), 0);
-        auto hostResults = std::vector<uint32_t>(numOutputs, 0);
-	auto hostMemLocations = std::vector<uint32_t>(numMemLocations, 0);
-        testData.toHost(hostTestData.begin());
-        results.toHost(hostResults.begin());
-	memLocations.toHost(hostMemLocations.begin());
+	if (rand() % 1000 == 1) {
+	    {{ postConditionSample }}
+	}
         if ({{ postCondition }}) {
             weakBehavior++;
         } else {
@@ -81,13 +78,13 @@ public:
     }
 
     void clearMemory(Array &gpuMem, int size) {
-        auto zeros = std::vector<uint32_t>(size, 0);
-        gpuMem.fromHost(zeros.begin(), zeros.end());
+	for (int i = 0; i < size; i++) {
+		gpuMem[i] = 0;
+	}
     }
-
-    void setShuffleIds(Array &shuffleIds) {
+    
+    void setShuffleIds(Array &ids) {
         // initialize identity mapping
-        auto ids = std::vector<uint32_t>(numWorkgroups*workgroupSize);
         for (int i = 0; i < ids.size(); i++) {
             ids[i] = i;
         }
@@ -115,11 +112,9 @@ public:
                 }
             }
         }
-        shuffleIds.fromHost(ids.begin(), ids.end());
     }
 
-    void setMemLocations(Array &memLocations) {
-	auto locations = std::vector<uint32_t>(numMemLocations, 0);
+    void setMemLocations(Array &locations) {
 	std::set<int> usedRegions;
         int numRegions = testMemorySize / memStride;
         for (int i = 0; i < numMemLocations; i++) {
@@ -130,14 +125,12 @@ public:
             locations[i] = (region * memStride)/sizeof(uint32_t) + locInRegion;
             usedRegions.insert(region);
         }
-	memLocations.fromHost(locations.begin(), locations.end());
     }
 
     /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
      * workgroups to specific stress locations. 
      */
-    void setScratchLocations(Array &scratchLocations) {
-        auto locations = std::vector<uint32_t>(numWorkgroups, 0);
+    void setScratchLocations(Array &locations) {
 	std::set <int> usedRegions;
         int numRegions = scratchMemorySize / stressLineSize;
         for (int i = 0; i < stressTargetLines; i++) {
@@ -164,7 +157,6 @@ public:
                     break;
             }
         }
-        scratchLocations.fromHost(locations.begin(), locations.end());
     }
 
     int setWorkgroupSize() {
@@ -175,13 +167,10 @@ public:
         return numWorkgroups;
     }
 
-    void setStressParams(Array &stressParams) {
-	auto params = std::vector<uint32_t>(3, 0);
-
+    void setStressParams(Array &params) {
 	params[0] = memStress;
 	params[1] = preStress;
 	params[2] = barrier;
-	stressParams.fromHost(params.begin(), params.end());
     }
 };
 
