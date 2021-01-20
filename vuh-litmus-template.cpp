@@ -18,10 +18,11 @@ const int preStress = {{ preStress }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
 const char* testName = "{{ testName }}";
+const char* weakBehaviorStr = "{{ weakBehaviorStr }}";
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 
-using Array = vuh::Array<uint32_t,vuh::mem::HostCoherent>;
+using Array = vuh::Array<uint32_t,vuh::mem::Host>;
 class LitmusTester {
 
 private:
@@ -30,6 +31,8 @@ private:
 
 public:
     void run() {
+	printf("Running test %s\n", testName);
+	printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
         // setup devices, memory, and parameters
         auto instance = vuh::Instance();
         auto device = instance.devices().at(0);

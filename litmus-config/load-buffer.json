@@ -7,12 +7,14 @@
                 {
                     "action": "read",
                     "memoryLocation": "y",
-                    "variable": "r0"
+                    "variable": "r0",
+		    "memoryOrder": "acquire"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "x",
-                    "value": 1
+                    "value": 1,
+		    "memoryOrder": "release"
                 }
             ]
         },
@@ -22,12 +24,14 @@
                 {
                     "action": "read",
                     "memoryLocation": "x",
-                    "variable": "r1"
+                    "variable": "r1",
+		    "memoryOrder": "acquire"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "y",
-                    "value": 1
+                    "value": 1,
+		    "memoryOrder": "release"
                 }
             ]
         }

@@ -3,9 +3,8 @@ import argparse
 import json
 import subprocess
 
-mo_relaxed = "memory_order_relaxed"
-mo_seq_cst = "memory_order_seq_cst"
 DEFAULT_LOCAL_ID = 0
+DEFAULT_MEM_ORDER = "relaxed"
 defaults_dict = {
     "numWorkgroups": 4,
     "workgroupSize": 1,
@@ -61,26 +60,44 @@ class LitmusTest:
 
     class Instruction:
 
+        openCL_mem_order = {
+            "relaxed": "memory_order_relaxed",
+            "sc": "memory_order_seq_cst",
+            "acquire": "memory_order_acquire",
+            "release": "memory_order_release",
+            "acq_rel": "memory_order_acq_rel"
+        }
+
         def openCl_repr(self):
             pass
 
     class ReadInstruction(Instruction):
 
-        def __init__(self, mem_loc, variable):
+        def __init__(self, mem_loc, variable, mem_order):
             self.mem_loc = mem_loc
             self.variable = variable
+            self.mem_order = mem_order
 
         def openCL_repr(self):
-            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.variable, self.mem_loc, mo_relaxed)
+            return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(self.variable, self.mem_loc, self.openCL_mem_order[self.mem_order])
 
     class WriteInstruction(Instruction):
 
-        def __init__(self, mem_loc, value):
+        def __init__(self, mem_loc, value, mem_order):
             self.mem_loc = mem_loc
             self.value = value
+            self.mem_order = mem_order
 
         def openCL_repr(self):
-            return "atomic_store_explicit(&test_data[{}], {}, {});".format(self.mem_loc, self.value, mo_relaxed)
+            return "atomic_store_explicit(&test_data[{}], {}, {});".format(self.mem_loc, self.value, self.openCL_mem_order[self.mem_order])
+
+    class MemoryFence(Instruction):
+
+        def __init__(self, mem_order):
+            self.mem_order = mem_order
+
+        def openCL_repr(self):
+            return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, {}, memory_scope_device);".format(self.openCL_mem_order[self.mem_order])
 
     class Thread:
         def __init__(self, workgroup, local_id, instructions):
@@ -130,16 +147,22 @@ class LitmusTest:
         for thread in self.test_config['threads']:
             instructions = []
             for instruction in thread['actions']:
-                if instruction['memoryLocation'] not in self.memory_locations:
+                if 'memoryLocation' in instruction and instruction['memoryLocation'] not in self.memory_locations:
                     self.memory_locations[instruction['memoryLocation']] = mem_loc
                     mem_loc += 1
+                if 'memoryOrder' in instruction:
+                    mem_order = instruction['memoryOrder']
+                else:
+                    mem_order = DEFAULT_MEM_ORDER
                 if instruction['action'] == "read":
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
                         variable_output += 1
-                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable']))
+                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable'], mem_order))
                 if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value']))
+                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order))
+                if instruction['action'] == "fence":
+                    instructions.append(self.MemoryFence(mem_order))
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
@@ -165,14 +188,17 @@ class LitmusTest:
         conditions = []
         sample_ids = []
         sample_values = []
+        weak_values = []
         for post_condition in self.post_conditions:
             sample_ids.append("{}: %u".format(post_condition.identifier))
+            weak_values.append("{}: {}".format(post_condition.identifier, post_condition.value))
             if post_condition.output_type == "variable":
                 sample_values.append("results[{}]".format(self.variables[post_condition.identifier]))
                 conditions.append("results[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
                 sample_values.append("testData[memLocations[{}]]".format(self.memory_locations[post_condition.identifier]))
                 conditions.append("testData[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+        self.template_replacements['weakBehaviorStr'] = ", ".join(weak_values)
         self.template_replacements['postConditionSample'] = """printf("{}\\n", {});""".format(", ".join(sample_ids), ",".join(sample_values))
         self.template_replacements['postCondition'] = " && ".join(conditions)
 
@@ -201,7 +227,7 @@ class LitmusTest:
                     variables.add(instr.variable)
                 thread_statements.append(instr.openCL_repr())
             for variable in variables:
-                thread_statements.append("atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, mo_seq_cst))
+                thread_statements.append("atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, "memory_order_seq_cst"))
             thread_statements = ["    {}".format(statement) for statement in thread_statements]
             body_statements = body_statements + ["  {}".format(self.thread_filter(thread.workgroup, thread.local_id, first_thread))] + thread_statements
             first_thread = False
