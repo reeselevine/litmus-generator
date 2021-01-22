@@ -6,15 +6,15 @@
 
 const int numWorkgroups = {{ numWorkgroups }};
 const int workgroupSize = {{ workgroupSize }};
-const int shuffle = {{ shuffle }};
-const int barrier = {{ barrier }};
+const int shufflePct = {{ shufflePct }};
+const int barrierPct = {{ barrierPct }};
 const int numMemLocations = {{ numMemLocations }};
 const int testMemorySize = {{ testMemorySize }};
 const int numOutputs = {{ numOutputs }};
 const int scratchMemorySize = {{ scratchMemorySize }};
 const int memStride = {{ memStride }};
-const int memStress = {{ memStress }};
-const int preStress = {{ preStress }};
+const int memStressPct = {{ memStressPct }};
+const int preStressPct = {{ preStressPct }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
 const char* testName = "{{ testName }}";
@@ -91,7 +91,7 @@ public:
         for (int i = 0; i < ids.size(); i++) {
             ids[i] = i;
         }
-        if (shuffle) {
+        if (percentage_check(shufflePct)) {
             // shuffle workgroups
             for (int i = numWorkgroups - 1; i >= 0; i--) {
                 int x = rand() % (i + 1);
@@ -171,9 +171,25 @@ public:
     }
 
     void setStressParams(Array &params) {
-	params[0] = memStress;
-	params[1] = preStress;
-	params[2] = barrier;
+        if (percentageCheck(memStressPct)) {
+            params[0] = 1;
+        } else {
+            params[0] = 0;
+        }
+        if (percentageCheck(preStressPct)) {
+            params[1] = 1;
+        } else {
+            params[1] = 0;
+        }
+        if (percentageCheck(barrierPct)) {
+            params[2] = 1;
+        } else {
+            params[2] = 0;
+        }
+    }
+
+    bool percentageCheck(percentage) {
+        return rand() % 100 < percentage;
     }
 };
 

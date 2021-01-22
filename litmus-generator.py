@@ -8,14 +8,14 @@ DEFAULT_MEM_ORDER = "relaxed"
 defaults_dict = {
     "numWorkgroups": 4,
     "workgroupSize": 1,
-    "shuffle": 0,
-    "barrier": 1,
+    "shufflePct": 0,
+    "barrierPct": 0,
     "memStride": 1,
-    "memStress": 1,
+    "memStressPct": 0,
     "stressLineSize": 2,
     "stressTargetLines": 1,
     "stressAssignmentStrategy": "ROUND_ROBIN",
-    "preStress": 1,
+    "preStressPct": 0,
     "testIterations": 10000
 }
 
