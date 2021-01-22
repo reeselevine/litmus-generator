@@ -6,8 +6,10 @@ import subprocess
 DEFAULT_LOCAL_ID = 0
 DEFAULT_MEM_ORDER = "relaxed"
 defaults_dict = {
-    "numWorkgroups": 4,
-    "workgroupSize": 1,
+    "minWorkgroups": 4,
+    "maxWorkgroups": 4,
+    "minWorkgroupSize": 1,
+    "maxWorkgroupSize": 1,
     "shufflePct": 0,
     "barrierPct": 0,
     "memStride": 1,

@@ -4,8 +4,10 @@
 #include <set>
 #include <string>
 
-const int numWorkgroups = {{ numWorkgroups }};
-const int workgroupSize = {{ workgroupSize }};
+const int minWorkgroups = {{ minWorkgroups }};
+const int maxWorkgroups = {{ maxWorkgroups }};
+const int minWorkgroupSize = {{ minWorkgroupSize }};
+const int maxWorkgroupSize = {{ maxWorkgroupSize }};
 const int shufflePct = {{ shufflePct }};
 const int barrierPct = {{ barrierPct }};
 const int numMemLocations = {{ numMemLocations }};
@@ -39,10 +41,10 @@ public:
         auto testData = Array(device, testMemorySize/sizeof(uint32_t));
 	auto memLocations = Array(device, numMemLocations);
         auto results = Array(device, numOutputs);
-        auto shuffleIds = Array(device, numWorkgroups*workgroupSize);
+        auto shuffleIds = Array(device, maxWorkgroups*maxWorkgroupSize);
         auto barrier = Array(device, 1);
         auto scratchpad = Array(device, scratchMemorySize/sizeof(uint32_t));
-        auto scratchLocations = Array(device, numWorkgroups);
+        auto scratchLocations = Array(device, maxWorkgroups);
 	auto stressParams = Array(device, 3);
         using SpecConstants = vuh::typelist<uint32_t>;
 	std::string testFile(testName);
@@ -50,21 +52,18 @@ public:
         auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
 
 	for (int i = 0; i < {{ testIterations }}; i++) {
-
-            // initialize and run program
+	    int numWorkgroups = setNumWorkgroups();
+	    int workgroupSize = setWorkgroupSize();
             clearMemory(testData, testMemorySize/sizeof(uint32_t));
 	    setMemLocations(memLocations);
             clearMemory(results, numOutputs);
-            setShuffleIds(shuffleIds);
+            setShuffleIds(shuffleIds, numWorkgroups, workgroupSize);
             clearMemory(barrier, 1);
             clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
-            setScratchLocations(scratchLocations);
+            setScratchLocations(scratchLocations, numWorkgroups);
 	    setStressParams(stressParams);
 
-            int _workgroupSize = setWorkgroupSize();
-            int _numWorkgroups = setNumWorkgroups();
-
-            program.grid(_numWorkgroups).spec(_workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
+            program.grid(numWorkgroups).spec(workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
             checkResult(testData, results, memLocations);
 	}
     }
@@ -86,12 +85,12 @@ public:
 	}
     }
     
-    void setShuffleIds(Array &ids) {
+    void setShuffleIds(Array &ids, int numWorkgroups, int workgroupSize) {
         // initialize identity mapping
-        for (int i = 0; i < ids.size(); i++) {
+        for (int i = 0; i < numWorkgroups*workgroupSize; i++) {
             ids[i] = i;
         }
-        if (percentage_check(shufflePct)) {
+        if (percentageCheck(shufflePct)) {
             // shuffle workgroups
             for (int i = numWorkgroups - 1; i >= 0; i--) {
                 int x = rand() % (i + 1);
@@ -133,7 +132,7 @@ public:
     /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
      * workgroups to specific stress locations. 
      */
-    void setScratchLocations(Array &locations) {
+    void setScratchLocations(Array &locations, int numWorkgroups) {
 	std::set <int> usedRegions;
         int numRegions = scratchMemorySize / stressLineSize;
         for (int i = 0; i < stressTargetLines; i++) {
@@ -163,11 +162,13 @@ public:
     }
 
     int setWorkgroupSize() {
-        return workgroupSize;
+	int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
+        return minWorkgroupSize + size;
     }
 
     int setNumWorkgroups() {
-        return numWorkgroups;
+	int size = rand() % (maxWorkgroups - minWorkgroups);
+        return minWorkgroups + size;
     }
 
     void setStressParams(Array &params) {
@@ -188,12 +189,13 @@ public:
         }
     }
 
-    bool percentageCheck(percentage) {
+    bool percentageCheck(int percentage) {
         return rand() % 100 < percentage;
     }
 };
 
 int main(int argc, char* argv[]) {
+    srand (time(NULL));
     LitmusTester app;
     try {
         app.run();
@@ -206,3 +208,5 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
+
+

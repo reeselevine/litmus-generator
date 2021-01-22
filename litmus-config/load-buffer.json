@@ -8,13 +8,13 @@
                     "action": "read",
                     "memoryLocation": "y",
                     "variable": "r0",
-		    "memoryOrder": "acquire"
+		    "memoryOrder": "relaxed"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "x",
                     "value": 1,
-		    "memoryOrder": "release"
+		    "memoryOrder": "relaxed"
                 }
             ]
         },
@@ -25,13 +25,13 @@
                     "action": "read",
                     "memoryLocation": "x",
                     "variable": "r1",
-		    "memoryOrder": "acquire"
+		    "memoryOrder": "relaxed"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "y",
                     "value": 1,
-		    "memoryOrder": "release"
+		    "memoryOrder": "relaxed"
                 }
             ]
         }
