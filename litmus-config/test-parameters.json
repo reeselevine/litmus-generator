@@ -1,0 +1,20 @@
+{
+    "testIterations": 100000,
+    "numWorkgroups": 128,
+    "workgroupSize": 32,
+    "testMemorySize": 1024,
+    "scratchMemorySize": 4096,
+    "shuffle": 1,
+    "barrier": 1,
+    "memStride": 64,
+    "memStress": 1,
+    "stressLineSize": 256,
+    "stressTargetLines": 2,
+    "stressAssignmentStrategy": "ROUND_ROBIN",
+    "stressPattern": ["store", "load"],
+    "stressIterations": 1000,
+    "preStress": 1,
+    "preStressPattern": ["load", "load"],
+    "preStressIterations": 100
+}
+
