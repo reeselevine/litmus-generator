@@ -1,1 +1,1 @@
-/usr/bin/c++ -g -DNDEBUG -D_CRT_SECURE_NO_WARNINGS -I/usr/local/include -I/shared/vuh-sources/include -L/usr/local/ -L/shared/vuh-sources/lib -L/snap/gnome-3-34-1804/66/usr/lib/x86_64-linux-gnu/ -std=gnu++14 -o exec $1.cpp -lvuh -lvulkan -ldl -lpthread -lX11 -lXxf86vm
+/usr/bin/c++ -DNDEBUG -I/shared/vuh-sources/include -std=gnu++14 -o exec $1.cpp -lvuh -lvulkan 

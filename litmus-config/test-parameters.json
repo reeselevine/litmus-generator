@@ -1,7 +1,7 @@
 {
     "testIterations": 10000,
-    "maxWorkgroups": 128,
-    "maxWorkgroupSize": 32,
+    "maxWorkgroups": 36,
+    "maxWorkgroupSize": 1024,
     "testMemorySize": 1024,
     "scratchMemorySize": 4096,
     "shufflePct": 100,
@@ -12,7 +12,7 @@
     "stressTargetLines": 2,
     "stressAssignmentStrategy": "ROUND_ROBIN",
     "stressPattern": ["store", "load"],
-    "stressIterations": 1000,
+    "stressIterations": 1,
     "preStressPct": 100,
     "preStressPattern": ["load", "load"],
     "preStressIterations": 100

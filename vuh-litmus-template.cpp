@@ -62,7 +62,6 @@ public:
             clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
             setScratchLocations(scratchLocations, numWorkgroups);
 	    setStressParams(stressParams);
-
             program.grid(numWorkgroups).spec(workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
             checkResult(testData, results, memLocations);
 	}
@@ -162,13 +161,21 @@ public:
     }
 
     int setWorkgroupSize() {
-	int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
-        return minWorkgroupSize + size;
+	if (minWorkgroupSize == maxWorkgroupSize) {
+	    return minWorkgroupSize;
+	} else {
+ 	    int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
+            return minWorkgroupSize + size;
+	}
     }
 
     int setNumWorkgroups() {
-	int size = rand() % (maxWorkgroups - minWorkgroups);
-        return minWorkgroups + size;
+	if (minWorkgroups == maxWorkgroups) {
+	    return minWorkgroups;
+	} else {
+	    int size = rand() % (maxWorkgroups - minWorkgroups);
+            return minWorkgroups + size;
+	}
     }
 
     void setStressParams(Array &params) {
