@@ -67,17 +67,15 @@ public:
         createDescriptorSetLayout();
         createDescriptorSet();
         for (int i = 0; i < 10; i++) {
+	    printf("\ntest iteration %i\n", i);
             uint32_t workgroupSize = setWorkgroupSize();
 	    uint32_t numWorkgroups = setNumWorkgroups();
 	    printf("num workgroups: %u\n", numWorkgroups);
 	    printf("workgroup size: %u\n", workgroupSize);
 	    createComputePipeline(workgroupSize);
      	    createCommandBuffer(numWorkgroups);
-	    printf("here\n");
-
             initializeBuffer();
             runCommandBuffer();
-
             checkResult(numWorkgroups, workgroupSize);
 	}
         cleanup();
@@ -126,11 +124,11 @@ public:
      }
 
     void checkResult(uint32_t numWorkgroups, uint32_t workgroupSize) {
-        int32_t* data = NULL;
+        uint32_t* data = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
         for (int i = 0; i < numWorkgroups*workgroupSize; i++) {
 		if (data[i] != 1) {
-			printf("%ith memory location is %i, which is not equal to 1\n", i, data[i]);
+			printf("%uth memory location is %i, which is not equal to 1\n", i, data[i]);
 			break;
 		}
 	}
@@ -287,7 +285,7 @@ public:
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocateInfo.allocationSize = memorySize;
         allocateInfo.memoryTypeIndex = findMemoryType(
-            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+            memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
         VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
     }

@@ -22,8 +22,6 @@ public:
         using SpecConstants = vuh::typelist<uint32_t>;
 	std::string testFile(testName);
 	testFile = testFile + ".spv";
-        auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
-
 	for (int i = 0; i < 10; i++) {
 	    printf("\ntest iteration %i\n", i);
 	    int numWorkgroups = setNumWorkgroups();
@@ -32,6 +30,7 @@ public:
 	    printf("workgroup size: %i\n", workgroupSize);
 	    int size = numWorkgroups*workgroupSize;
             clearMemory(testMemory, size);
+            auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
             program.grid(numWorkgroups).spec(workgroupSize)(testMemory);
 	    for (int i = 0; i < size; i++) {
 		    if (testMemory[i] != 1) {
