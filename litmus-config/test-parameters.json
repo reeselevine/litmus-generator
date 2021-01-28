@@ -12,7 +12,7 @@
     "stressTargetLines": 2,
     "stressAssignmentStrategy": "ROUND_ROBIN",
     "stressPattern": ["store", "load"],
-    "stressIterations": 1,
+    "stressIterations": 1000,
     "preStressPct": 100,
     "preStressPattern": ["load", "load"],
     "preStressIterations": 100
