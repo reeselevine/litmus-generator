@@ -10,21 +10,10 @@
 #include <time.h>
 using namespace std;
 
-const int NUM_POD_ARGS = 3;
-const int numWorkgroups = {{ numWorkgroups }};
-const int workgroupSize = {{ workgroupSize }};
-const int shuffle = {{ shuffle }};
-const int barrier = {{ barrier }};
-const int numMemLocations = {{ numMemLocations }};
-const int testMemorySize = {{ testMemorySize }};
-const int scratchMemorySize = {{ scratchMemorySize }};
-const int memStride = {{ memStride }};
-const int memStress = {{ memStress }};
-const int preStress = {{ preStress }};
-const int stressLineSize = {{ stressLineSize }};
-const int stressTargetLines = {{ stressTargetLines }};
-int weakBehavior = 0;
-int nonWeakBehavior = 0;
+const uint32_t minWorkgroups = 4;
+const uint32_t maxWorkgroups = 36;
+const uint32_t minWorkgroupSize = 1;
+const uint32_t maxWorkgroupSize = 1024;
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -60,32 +49,13 @@ private:
     VkDescriptorSet descriptorSet;
     VkDescriptorSetLayout descriptorSetLayout;
 
-    typedef enum StressAssignmentStrategy {ROUND_ROBIN, CHUNKING} StressAssignmentStrategy;
-    StressAssignmentStrategy stressAssignmentStrategy = {{ stressAssignmentStrategy }};
-
-    typedef enum BufferType {TEST_DATA, RESULTS, SHUFFLE_IDS, BARRIER, SCRATCHPAD, SCRATCH_LOCATIONS} BufferType;
-    /*
-    Buffers that will be used in the compute shader.
-    */
-    struct BufferInfo {
-        BufferType bufferType;
-        VkBuffer buffer;
-        int size; // the size of the buffer in bytes
-        uint32_t requiredSize; // the minimum size buffer that vulkan needs allocated in bytes
-        uint32_t memOffset; // the offset within the allocated memory of this buffer
-    };
+    VkBuffer buffer;
     VkDeviceMemory bufferMemory;
-    vector<BufferInfo> bufferInfos;
 
-    /** Array used to  update plain old data arguments in the kernel. */
-    uint32_t podArgs[NUM_POD_ARGS + numMemLocations];
-        
     vector<const char *> enabledLayers;
 
     VkQueue queue; // a queue supporting compute operations.
     uint32_t queueFamilyIndex;
-
-    uint32_t shader[{{ shaderSize }}] = {{ shaderCode }};
 
 public:
     void run() {
@@ -93,117 +63,50 @@ public:
         createInstance();
         findPhysicalDevice();
         createDevice();
-        createBuffers();
+        createBuffer();
         createDescriptorSetLayout();
         createDescriptorSet();
-        createComputePipeline();
-     	createCommandBuffer();
-        for (int i = 0; i < 10000; i++) {
-            initializeBuffers();
+        for (int i = 0; i < 10; i++) {
+            uint32_t workgroupSize = setWorkgroupSize();
+	    uint32_t numWorkgroups = setNumWorkgroups();
+	    printf("num workgroups: %u\n", numWorkgroups);
+	    printf("workgroup size: %u\n", workgroupSize);
+	    createComputePipeline(workgroupSize);
+     	    createCommandBuffer(numWorkgroups);
+	    printf("here\n");
+
+            initializeBuffer();
             runCommandBuffer();
-            checkResult();
-	    }
+
+            checkResult(numWorkgroups, workgroupSize);
+	}
         cleanup();
     }
 
-    void shuffleIds(uint32_t *ids) {
-        // initialize identity mapping
-        for (int i = 0; i < numWorkgroups * workgroupSize; i++) {
-            ids[i] = i;
-        }
-        if (shuffle) {
-            // shuffle workgroups
-            for (int i = numWorkgroups - 1; i >= 0; i--) {
-                int x = rand() % (i + 1);
-                if (workgroupSize > 1) {
-                    // swap and shuffle invocations within a workgroup
-                    for (int j = 0; j < workgroupSize; j++) {
-                        uint32_t temp = ids[i*workgroupSize + j];
-                        ids[i*workgroupSize + j] = ids[x*workgroupSize + j];
-                        ids[x*workgroupSize + j] = temp;
-                    }
-                    for (int j = workgroupSize - 1; j > 0; j--) {
-                        int y = rand() % (j + 1);
-                        uint32_t temp = ids[i * workgroupSize + y];
-                        ids[i * workgroupSize + y] = ids[i * workgroupSize + j];
-                        ids[i * workgroupSize + j] = temp;
-                    }
-                } else {
-                    uint32_t temp = ids[i];
-                    ids[i] = ids[x];
-                    ids[x] = temp;
-                }
-            }
+    uint32_t setWorkgroupSize() {
+        if (minWorkgroupSize == maxWorkgroupSize) {
+            return minWorkgroupSize;
+        } else {
+            uint32_t size = rand() % (maxWorkgroupSize - minWorkgroupSize);
+            return minWorkgroupSize + size;
         }
     }
 
-    /** Plain old data arguments are clustered into one buffer. The order is how they appear in the kernel arguments, so positions are hardcoded here. */
-    void setPodArgs() {
-        podArgs[0] = memStress;
-        podArgs[1] = preStress;
-        podArgs[2] = barrier;
-        // Randomizes what locations the test threads access in the test memory. Ensures a region is only used at most once. 
-        set<int> usedRegions;
-        int numRegions = testMemorySize / memStride;
-        for (int i = 0; i < numMemLocations; i++) {
-            int region = rand() % numRegions;
-            while(usedRegions.count(region))
-                region = rand() % numRegions;
-            int locInRegion = rand() % (memStride/sizeof(uint32_t));
-            podArgs[i + NUM_POD_ARGS] = (region * memStride)/sizeof(uint32_t) + locInRegion;
-            usedRegions.insert(region);
+    uint32_t setNumWorkgroups() {
+        if (minWorkgroups == maxWorkgroups) {
+            return minWorkgroups;
+        } else {
+            uint32_t size = rand() % (maxWorkgroups - minWorkgroups);
+            return minWorkgroups + size;
         }
     }
 
-    /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
-     * workgroups to specific stress locations. 
-     */
-    void setScratchLocations(uint32_t* scratchLocations) {
-        set <int> usedRegions;
-        int numRegions = scratchMemorySize / stressLineSize;
-        for (int i = 0; i < stressTargetLines; i++) {
-            int region = rand() % numRegions;
-            while(usedRegions.count(region))
-                region = rand() % numRegions;
-            int locInRegion = rand() % (stressLineSize/sizeof(uint32_t));
-            switch (stressAssignmentStrategy) {
-                case ROUND_ROBIN:
-                    for (int j = i; j < numWorkgroups; j += stressTargetLines) {
-                        scratchLocations[j] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
-                    }
-                    break;
-                case CHUNKING:
-                    int workgroupsPerLocation = numWorkgroups/stressTargetLines;
-                    for (int j = 0; j < workgroupsPerLocation; j++) {
-                        scratchLocations[i*workgroupsPerLocation + j] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
-                    }
-                    if (i == stressTargetLines - 1 && numWorkgroups % stressTargetLines != 0) {
-                        for (int j = 0; j < numWorkgroups % stressTargetLines; j++) {
-                            scratchLocations[numWorkgroups - j - 1] = (region * stressLineSize)/sizeof(uint32_t) + locInRegion;
-                        }
-                    }
-                    break;
-            }
-        }
-    }
-
-    void initializeBuffers() {
+    void initializeBuffer() {
         uint32_t *memory = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&memory));
-        for (BufferInfo info : bufferInfos) {
-            switch(info.bufferType) {
-                case SHUFFLE_IDS:
-                    shuffleIds(&memory[info.memOffset]);
-                    break;
-                case SCRATCH_LOCATIONS:
-                    setScratchLocations(&memory[info.memOffset]);
-                    break;
-                default:
-                    for (uint32_t i = info.memOffset; i < info.memOffset + (info.size)/sizeof(uint32_t); i++) {
-                        memory[i] = 0;
-                    }
-            }
-        }
+	for (uint32_t i = 0; i < maxWorkgroups * maxWorkgroupSize; i++) {
+		memory[i] = 0;
+	}
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -222,16 +125,15 @@ public:
         return VK_FALSE;
      }
 
-    void checkResult() {
+    void checkResult(uint32_t numWorkgroups, uint32_t workgroupSize) {
         int32_t* data = NULL;
         VK_CHECK_RESULT(vkMapMemory(device, bufferMemory, 0, VK_WHOLE_SIZE, 0, (void **)&data));
-        int32_t* output = data + bufferInfos[0].requiredSize/sizeof(uint32_t);
-        uint32_t* memLocations = &podArgs[3];
-        if ({{ postCondition }}) {
-            weakBehavior++;
-        } else {
-            nonWeakBehavior++;
-        }
+        for (int i = 0; i < numWorkgroups*workgroupSize; i++) {
+		if (data[i] != 1) {
+			printf("%ith memory location is %i, which is not equal to 1\n", i, data[i]);
+			break;
+		}
+	}
         vkUnmapMemory(device, bufferMemory);
     }
 
@@ -315,7 +217,7 @@ public:
         for (VkPhysicalDevice device : devices) {
 	    VkPhysicalDeviceProperties properties;
 	    vkGetPhysicalDeviceProperties(device, &properties);
-            if (properties.deviceID == 4935) { // We want the nvidia gpu on this server.
+            if (properties.deviceID == 7857) { // We want the nvidia gpu on this server.
                 physicalDevice = device;
             }
         }
@@ -371,79 +273,36 @@ public:
         return -1;
     }
 
-    void createBuffers() {
-        int bufferIndex = 0;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = TEST_DATA;
-        bufferInfos[bufferIndex].size = testMemorySize; // testing buffer 
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = RESULTS;
-        bufferInfos[bufferIndex].size = {{ numOutputs }} * sizeof(uint32_t); // output buffer
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = SHUFFLE_IDS;
-        bufferInfos[bufferIndex].size = numWorkgroups * workgroupSize * sizeof(uint32_t); // thread shuffle buffer
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = BARRIER;
-        bufferInfos[bufferIndex].size = sizeof(uint32_t); // barrier buffer
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = SCRATCHPAD;
-        bufferInfos[bufferIndex].size = scratchMemorySize; // scratch (stress) memory
-        bufferIndex++;
-        bufferInfos.push_back(BufferInfo());
-        bufferInfos[bufferIndex].bufferType = SCRATCH_LOCATIONS;
-        // TODO: make this the max workgroup number
-        bufferInfos[bufferIndex].size = numWorkgroups*sizeof(uint32_t);  // The location in the scratch memory for each workgroup to stress
-        uint32_t requiredBufferSize = 0;
-	    int i = 0;
-        for (BufferInfo info : bufferInfos) {
-          VkBufferCreateInfo bufferCreateInfo = {};
-          bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-          bufferCreateInfo.size = info.size; // buffer size in bytes. 
-          bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
-          bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
-          VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &info.buffer)); // create buffer.
-          VkMemoryRequirements memoryRequirements;
-          vkGetBufferMemoryRequirements(device, info.buffer, &memoryRequirements);
-          info.requiredSize = memoryRequirements.size;
-          info.memOffset = requiredBufferSize/sizeof(uint32_t);
-          requiredBufferSize += memoryRequirements.size;
-	      bufferInfos[i] = info;
-	      i++;
-        }
-        VkDeviceSize memorySize = requiredBufferSize;
+    void createBuffer() {
+        VkBufferCreateInfo bufferCreateInfo = {};
+        bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferCreateInfo.size = maxWorkgroups * maxWorkgroupSize*sizeof(uint32_t); // buffer size in bytes. 
+        bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; // buffer is used as a storage buffer.
+        bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // buffer is exclusive to a single queue family at a time. 
+        VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL, &buffer)); // create buffer.
+        VkMemoryRequirements memoryRequirements;
+        vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
+        VkDeviceSize memorySize = memoryRequirements.size;
         VkMemoryAllocateInfo allocateInfo = {};
         allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocateInfo.allocationSize = memorySize;
-        VkMemoryRequirements memoryRequirements;
-        vkGetBufferMemoryRequirements(device, bufferInfos[0].buffer, &memoryRequirements);
         allocateInfo.memoryTypeIndex = findMemoryType(
             memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         VK_CHECK_RESULT(vkAllocateMemory(device, &allocateInfo, NULL, &bufferMemory));
-        VkDeviceSize memoryOffset = 0;
-        i = 0;
-        for (BufferInfo info : bufferInfos) {
-          VK_CHECK_RESULT(vkBindBufferMemory(device, info.buffer, bufferMemory, memoryOffset));
-          memoryOffset += info.requiredSize;
-        }
+        VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
     }
 
     void createDescriptorSetLayout() {
-        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[bufferInfos.size()];
-        for (int i = 0; i < bufferInfos.size(); i++) {
-          VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
-          descriptorSetLayoutBinding.binding = i;
-          descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-          descriptorSetLayoutBinding.descriptorCount = 1;
-          descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-          descriptorSetLayoutBindings[i] = descriptorSetLayoutBinding;
-        }
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[1];
+        VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
+        descriptorSetLayoutBinding.binding = 0;
+        descriptorSetLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorSetLayoutBinding.descriptorCount = 1;
+        descriptorSetLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        descriptorSetLayoutBindings[0] = descriptorSetLayoutBinding;
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.bindingCount = bufferInfos.size();
+        descriptorSetLayoutCreateInfo.bindingCount = 1;
         descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings; 
         VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
     }
@@ -451,7 +310,7 @@ public:
     void createDescriptorSet() {
         VkDescriptorPoolSize descriptorPoolSize = {};
         descriptorPoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorPoolSize.descriptorCount = bufferInfos.size();
+        descriptorPoolSize.descriptorCount = 1;
 
         VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -467,32 +326,32 @@ public:
         descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
         VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
 
-        VkDescriptorBufferInfo descriptorBufferInfos[bufferInfos.size()];
-        VkWriteDescriptorSet writeDescriptorSets[bufferInfos.size()];
-        for (int i = 0; i < bufferInfos.size(); i++) {
-          VkDescriptorBufferInfo descriptorBufferInfo = {};
-          descriptorBufferInfo.buffer = bufferInfos[i].buffer;
-          descriptorBufferInfo.offset = 0;
-          descriptorBufferInfo.range = VK_WHOLE_SIZE;
-          descriptorBufferInfos[i] = descriptorBufferInfo;
-          VkWriteDescriptorSet writeDescriptorSet = {};
-          writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-          writeDescriptorSet.dstSet = descriptorSet; 
-          writeDescriptorSet.dstBinding = i; 
-          writeDescriptorSet.descriptorCount = 1;
-          writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
-          writeDescriptorSet.pBufferInfo = &descriptorBufferInfos[i];
-          writeDescriptorSets[i] = writeDescriptorSet;
-        }
-        vkUpdateDescriptorSets(device, bufferInfos.size(), writeDescriptorSets, 0, NULL);
+        VkDescriptorBufferInfo descriptorBufferInfos[1];
+        VkWriteDescriptorSet writeDescriptorSets[1];
+        VkDescriptorBufferInfo descriptorBufferInfo = {};
+        descriptorBufferInfo.buffer = buffer;
+        descriptorBufferInfo.offset = 0;
+        descriptorBufferInfo.range = VK_WHOLE_SIZE;
+        descriptorBufferInfos[0] = descriptorBufferInfo;
+        VkWriteDescriptorSet writeDescriptorSet = {};
+        writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSet.dstSet = descriptorSet; 
+        writeDescriptorSet.dstBinding = 0; 
+        writeDescriptorSet.descriptorCount = 1;
+        writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+        writeDescriptorSet.pBufferInfo = &descriptorBufferInfos[0];
+        writeDescriptorSets[0] = writeDescriptorSet;
+        vkUpdateDescriptorSets(device, 1, writeDescriptorSets, 0, NULL);
     }
 
-    void createComputePipeline() {
+    void createComputePipeline(uint32_t workgroupSize) {
         uint32_t filelength;
+	uint32_t* code = readFile(filelength, "test.spv");
+
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.pCode = shader;
-        createInfo.codeSize = sizeof(shader);
+        createInfo.pCode = code;
+        createInfo.codeSize = filelength;
         VK_CHECK_RESULT(vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
         VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
         shaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -527,7 +386,35 @@ public:
             NULL, &pipeline));
    }
 
-    void createCommandBuffer() {
+    uint32_t* readFile(uint32_t& length, const char* filename) {
+
+        FILE* fp = fopen(filename, "rb");
+        if (fp == NULL) {
+            printf("Could not find or open file: %s\n", filename);
+        }
+
+        // get file size.
+        fseek(fp, 0, SEEK_END);
+        long filesize = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+
+        long filesizepadded = long(ceil(filesize / 4.0)) * 4;
+
+        // read file contents.
+        char *str = new char[filesizepadded];
+        fread(str, filesize, sizeof(char), fp);
+        fclose(fp);
+
+        // data padding.
+        for (int i = filesize; i < filesizepadded; i++) {
+            str[i] = 0;
+        }
+
+        length = filesizepadded;
+        return (uint32_t *)str;
+    }
+
+    void createCommandBuffer(uint32_t numWorkgroups) {
         VkCommandPoolCreateInfo commandPoolCreateInfo = {};
         commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         commandPoolCreateInfo.flags = 0;
@@ -548,9 +435,6 @@ public:
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
-
-        setPodArgs();
-        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 32, (NUM_POD_ARGS + numMemLocations)*sizeof(uint32_t), podArgs);
 
         vkCmdDispatch(commandBuffer, numWorkgroups, 1, 1);
         VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); // end recording commands.
@@ -581,8 +465,7 @@ public:
         }
 
         vkFreeMemory(device, bufferMemory, NULL);
-	    for (BufferInfo info : bufferInfos) 
-          vkDestroyBuffer(device, info.buffer, NULL);	
+        vkDestroyBuffer(device, buffer, NULL);	
         vkDestroyShaderModule(device, computeShaderModule, NULL);
         vkDestroyDescriptorPool(device, descriptorPool, NULL);
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
@@ -598,8 +481,6 @@ int main(int argc, char* argv[]) {
     ComputeApplication app;
     try {
         app.run();
-        printf("weak behavior: %d\n", weakBehavior);
-        printf("non weak behavior: %d\n", nonWeakBehavior);
     }
     catch (const runtime_error& e) {
         printf("%s\n", e.what());
