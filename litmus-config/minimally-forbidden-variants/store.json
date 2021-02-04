@@ -1,38 +1,36 @@
 {
-    "testName": "store-buffer",
+    "testName": "store",
     "threads": [
         {
             "workgroup": 0,
-            "localId": 0,
             "actions": [
                 {
                     "action": "write",
                     "memoryLocation": "x",
-                    "value": 1,
+                    "value": 2,
 		    "memoryOrder": "relaxed"
                 },
                 {
-                    "action": "read",
+                    "action": "write",
                     "memoryLocation": "y",
-                    "variable": "r0",
-		    "memoryOrder": "relaxed"
+                    "value": 1,
+		    "memoryOrder": "release"
                 }
             ]
         },
         {
             "workgroup": 1,
-            "localId": 0,
             "actions": [
                 {
-                    "action": "write",
+                    "action": "read",
                     "memoryLocation": "y",
-                    "value": 1,
-		    "memoryOrder": "relaxed"
+                    "variable": "r0",
+		    "memoryOrder": "acquire"
                 },
                 {
-                    "action": "read",
+                    "action": "write",
                     "memoryLocation": "x",
-                    "variable": "r1",
+                    "value": 1,
 		    "memoryOrder": "relaxed"
                 }
             ]
@@ -40,18 +38,14 @@
     ],
     "postConditions": [
         {
-            "type": "variable",
-            "id": "r0",
-            "value": 0
+            "type": "memory",
+            "id": "x",
+            "value": 2
         },
         {
             "type": "variable",
-            "id": "r1",
-            "value": 0
+            "id": "r0",
+            "value": 1
         }
-    ],
-    "shuffle": 1,
-    "barrier": 1,
-    "memStride": 1,
-    "memStress": 1
+    ]
 }

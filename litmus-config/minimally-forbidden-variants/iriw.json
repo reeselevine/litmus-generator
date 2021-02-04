@@ -1,0 +1,84 @@
+{
+    "testName": "iriw",
+    "numWorkgroups": 4,
+    "threads": [
+        {
+            "workgroup": 0,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1,
+		    "memoryOrder": "sc"
+                }
+            ]
+        },
+        {
+            "workgroup": 1,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r0",
+		    "memoryOrder": "sc"
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r1",
+		    "memoryOrder": "sc"
+                }
+            ]
+        },
+        {
+            "workgroup": 2,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "y",
+                    "value": 1,
+		    "memoryOrder": "sc"
+                }
+            ]
+        },
+        {
+            "workgroup": 3,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r2",
+		    "memoryOrder": "sc"
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r3",
+		    "memoryOrder": "sc"
+                }
+            ]
+        }
+    ],
+    "postConditions": [
+        {
+            "type": "variable",
+            "id": "r0",
+            "value": 1
+        },
+        {
+            "type": "variable",
+            "id": "r1",
+            "value": 0
+        },
+        {
+            "type": "variable",
+            "id": "r2",
+            "value": 1
+        },
+        {
+            "type": "variable",
+            "id": "r3",
+            "value": 0
+        }
+    ]
+}

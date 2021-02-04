@@ -1,39 +1,38 @@
 {
-    "testName": "store-buffer",
+    "testName": "message-passing",
     "threads": [
         {
             "workgroup": 0,
-            "localId": 0,
             "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "y",
+                    "value": 1,
+		    "memoryOrder": "acquire"
+                },
                 {
                     "action": "write",
                     "memoryLocation": "x",
                     "value": 1,
-		    "memoryOrder": "relaxed"
-                },
-                {
-                    "action": "read",
-                    "memoryLocation": "y",
-                    "variable": "r0",
 		    "memoryOrder": "relaxed"
                 }
             ]
         },
         {
             "workgroup": 1,
-            "localId": 0,
             "actions": [
-                {
-                    "action": "write",
-                    "memoryLocation": "y",
-                    "value": 1,
-		    "memoryOrder": "relaxed"
-                },
                 {
                     "action": "read",
                     "memoryLocation": "x",
+                    "variable": "r0",
+		    "memoryOrder": "relaxed",
+
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
                     "variable": "r1",
-		    "memoryOrder": "relaxed"
+		    "memoryOrder": "release"
                 }
             ]
         }
@@ -42,16 +41,12 @@
         {
             "type": "variable",
             "id": "r0",
-            "value": 0
+            "value": 1
         },
         {
             "type": "variable",
             "id": "r1",
             "value": 0
         }
-    ],
-    "shuffle": 1,
-    "barrier": 1,
-    "memStride": 1,
-    "memStress": 1
+    ]
 }
