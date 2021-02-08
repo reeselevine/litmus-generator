@@ -49,9 +49,5 @@
             "id": "r1",
             "value": 0
         }
-    ],
-    "shuffle": 1,
-    "barrier": 1,
-    "memStride": 1,
-    "memStress": 1
+    ]
 }

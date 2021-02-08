@@ -25,7 +25,7 @@
                     "action": "read",
                     "memoryLocation": "x",
                     "variable": "r0",
-		    "memoryOrder": "relaxed",
+		    "memoryOrder": "relaxed"
 
                 },
                 {

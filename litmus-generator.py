@@ -3,25 +3,25 @@ import argparse
 import json
 import subprocess
 
-DEFAULT_LOCAL_ID = 0
-DEFAULT_MEM_ORDER = "relaxed"
-defaults_dict = {
-    "minWorkgroups": 4,
-    "maxWorkgroups": 4,
-    "minWorkgroupSize": 1,
-    "maxWorkgroupSize": 1,
-    "shufflePct": 0,
-    "barrierPct": 0,
-    "memStride": 1,
-    "memStressPct": 0,
-    "stressLineSize": 2,
-    "stressTargetLines": 1,
-    "stressAssignmentStrategy": "ROUND_ROBIN",
-    "preStressPct": 0,
-    "testIterations": 10000
-}
-
 class LitmusTest:
+
+    DEFAULT_LOCAL_ID = 0
+    DEFAULT_MEM_ORDER = "relaxed"
+    defaults_dict = {
+        "minWorkgroups": 4,
+        "maxWorkgroups": 4,
+        "minWorkgroupSize": 1,
+        "maxWorkgroupSize": 1,
+        "shufflePct": 0,
+        "barrierPct": 0,
+        "memStride": 1,
+        "memStressPct": 0,
+        "stressLineSize": 2,
+        "stressTargetLines": 1,
+        "stressAssignmentStrategy": "ROUND_ROBIN",
+        "preStressPct": 0,
+        "testIterations": 10000
+    }
 
     class StressAccessPattern:
         
@@ -141,11 +141,11 @@ class LitmusTest:
         self.stress_pattern = self.StressAccessPattern(self.parameter_config["stressPattern"])
 
     def initialize_template_replacements(self):
-        for key in defaults_dict:
+        for key in self.defaults_dict:
             if key in self.parameter_config:
                 self.template_replacements[key] = self.parameter_config[key]
             else:
-                self.template_replacements[key] = defaults_dict[key]
+                self.template_replacements[key] = self.defaults_dict[key]
 
     def initialize_threads(self):
         mem_loc = 0
@@ -159,7 +159,7 @@ class LitmusTest:
                 if 'memoryOrder' in instruction:
                     mem_order = instruction['memoryOrder']
                 else:
-                    mem_order = DEFAULT_MEM_ORDER
+                    mem_order = self.DEFAULT_MEM_ORDER
                 if instruction['action'] == "read":
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
@@ -172,7 +172,7 @@ class LitmusTest:
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
-                local_id = DEFAULT_LOCAL_ID
+                local_id = self.DEFAULT_LOCAL_ID
             self.threads.append(self.Thread(thread['workgroup'], local_id, instructions))
         min_test_memory_size = self.template_replacements['memStride'] * len(self.memory_locations)
         if 'testMemorySize' in self.parameter_config:
