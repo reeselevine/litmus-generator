@@ -6,3 +6,4 @@
 !minimally-forbidden-variants
 exec
 __pycache__
+*.csv
