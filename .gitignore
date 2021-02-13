@@ -1,6 +1,4 @@
-*.spv
 *.cl
-*.cpp
 !vuh-litmus-template.cpp
 *-variants
 !minimally-forbidden-variants
