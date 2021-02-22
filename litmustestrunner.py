@@ -13,11 +13,15 @@ def generate(test_config, parameter_config):
     litmus_test = litmusgenerator.LitmusTest(test_config, parameter_config)
     litmus_test.generate()
 
-def run(test_name):
+def run(test_name, check_output):
     subprocess.run(["/usr/bin/c++", "-I/shared/vuh-sources/include", "-std=gnu++14", "-o", "exec", "{}.cpp".format(test_name), "-lvuh", "-lvulkan"])
-    output = subprocess.check_output(["./exec"])
-    print(output.decode())
-    return output.decode()
+    if check_output:
+        output = subprocess.check_output(["./exec"])
+        print(output.decode())
+        return output.decode()
+    else:
+        subprocess.run(["./exec"])
+        return None
 
 def store_output(test_name, parameter_config, output, output_file_name):
     groups = re.search("weak behavior: (.*)\nnon weak behavior: (.*)\n", output)
@@ -66,14 +70,19 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.outputfile == None:
+        check_output = False
+    else:
+        check_output = True
     if args.generate:
         test_config, parameter_config = load_config(args, args.test_name)
         generate(test_config, parameter_config)
     elif args.generate_and_run:
         test_config, parameter_config = load_config(args, args.test_name)
         generate(test_config, parameter_config)
-        output = run(test_config['testName'])
-        store_output(test_config['testName'], parameter_config, output, args.outputfile)
+        output = run(test_config['testName'], check_output)
+        if output != None:
+            store_output(test_config['testName'], parameter_config, output, args.outputfile)
     elif args.generate_and_run_variants:
         if args.offset:
             offset = args.offset
@@ -83,8 +92,9 @@ def main():
         while os.path.exists(config_dir(args) + variant + ".json"):
             test_config, parameter_config = load_config(args, variant)
             generate(test_config, parameter_config)
-            output = run(args.test_name)
-            store_output(variant, parameter_config, output, args.outputfile)
+            output = run(args.test_name, check_output)
+            if output != None:
+                store_output(variant, parameter_config, output, args.outputfile)
             offset += 1
             variant = args.test_name + "-variant-{}".format(offset)
 
