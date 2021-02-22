@@ -29,4 +29,4 @@ The python script that generates and optionally runs the test is called `litmust
 
 `python3 litmustestrunner.py <test-name> -gr`: This will both generate the files and run the test, outputting the results to STDOUT. 
 
-`python3 litmustestrunner.py <test-name> -gr --output-file example.csv`: This will generate and run the test, storing the number of relaxed behaviors along with the test configuration in a csv file. This is useful when running different configurations in order to find settings that reveal more relaxed behaviors.
+`python3 litmustestrunner.py <test-name> -gr --outputfile example.csv`: This will generate and run the test, storing the number of relaxed behaviors along with the test configuration in a csv file. This is useful when running different configurations in order to find settings that reveal more relaxed behaviors.
