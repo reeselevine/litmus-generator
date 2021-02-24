@@ -36,11 +36,11 @@ private:
 public:
     void run() {
 	printf("Starting %s litmus test run\n", testName);
-	printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
-	printf("Sampling approximately every %i iterations\n", sampleInterval);
-        // setup devices, memory, and parameters
         auto instance = vuh::Instance();
 	auto device = getDevice(&instance);
+	printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
+	printf("Sampling output approximately every %i iterations\n", sampleInterval);
+        // setup devices, memory, and parameters
         auto testData = Array(device, testMemorySize/sizeof(uint32_t));
 	auto memLocations = Array(device, numMemLocations);
         auto results = Array(device, numOutputs);
