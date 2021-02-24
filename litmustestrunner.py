@@ -10,6 +10,7 @@ DEFAULT_TEST_PARAMETERS_FILE="litmus-config/test-parameters.json"
 DEFAULT_CONFIG_DIR="litmus-config/"
 
 def generate(test_config, parameter_config):
+    print("Generating {} litmus test".format(test_config['testName']))
     litmus_test = litmusgenerator.LitmusTest(test_config, parameter_config)
     litmus_test.generate()
 

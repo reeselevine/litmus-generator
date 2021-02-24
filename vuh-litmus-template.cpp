@@ -19,10 +19,12 @@ const int memStressPct = {{ memStressPct }};
 const int preStressPct = {{ preStressPct }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
+const int gpuDeviceId = {{ gpuDeviceId }};
 const char* testName = "{{ testName }}";
 const char* weakBehaviorStr = "{{ weakBehaviorStr }}";
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
+const int sampleInterval = 1000;
 
 using Array = vuh::Array<uint32_t,vuh::mem::Host>;
 class LitmusTester {
@@ -33,11 +35,12 @@ private:
 
 public:
     void run() {
-	printf("Running test %s\n", testName);
+	printf("Starting %s litmus test run\n", testName);
 	printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
+	printf("Sampling approximately every %i iterations\n", sampleInterval);
         // setup devices, memory, and parameters
         auto instance = vuh::Instance();
-        auto device = instance.devices().at(0);
+	auto device = getDevice(&instance);
         auto testData = Array(device, testMemorySize/sizeof(uint32_t));
 	auto memLocations = Array(device, numMemLocations);
         auto results = Array(device, numOutputs);
@@ -67,8 +70,22 @@ public:
 	}
     }
 
+    vuh::Device getDevice(vuh::Instance* instance) {
+	vuh::Device device = instance->devices().at(0);
+	if (gpuDeviceId != -1) {
+	    for (vuh::Device _device : instance->devices()) {
+		if (_device.properties().deviceID == gpuDeviceId) {
+		    device = _device;
+		    break;
+		}
+	    }
+	}
+	printf("Using device %s\n", device.properties().deviceName);
+	return device;
+    }
+
     void checkResult(Array &testData, Array &results, Array &memLocations) {
-	if (rand() % 1000 == 1) {
+	if (rand() % sampleInterval == 1) {
 	    {{ postConditionSample }}
 	}
         if ({{ postCondition }}) {

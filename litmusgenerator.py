@@ -20,7 +20,8 @@ class LitmusTest:
         "stressTargetLines": 1,
         "stressAssignmentStrategy": "ROUND_ROBIN",
         "preStressPct": 0,
-        "testIterations": 10000
+        "testIterations": 10000,
+        "gpuDeviceId": -1
     }
 
     class StressAccessPattern:
@@ -253,7 +254,7 @@ class LitmusTest:
             header,
             "int i = 0;",
             "uint val = atomic_fetch_add_explicit(barrier, 1, memory_order_relaxed);",
-            "while (val < {}) {{".format(len(self.threads)),
+            "while (i < 1024 && val < {}) {{".format(len(self.threads)),
             "  val = atomic_load_explicit(barrier, memory_order_relaxed);",
             "  i++;",
             "}"
@@ -277,13 +278,11 @@ class LitmusTest:
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
 
     def spirv_code(self):
-        spirv_output = subprocess.check_output(["/shared/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points", self.test_name + ".cl", "-o",  self.test_name + ".spv"])
-        decoded_spirv = spirv_output.decode().replace("\n", "")
-        spirv_length = decoded_spirv.count(",") + 1
-        self.template_replacements["shaderCode"] = spirv_output.decode().replace("\n", "")
-        self.template_replacements["shaderSize"] = spirv_length
+        print("Generating SPIRV code")
+        subprocess.run(["/shared/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points", self.test_name + ".cl", "-o",  self.test_name + ".spv"])
 
     def generate_vulkan_setup(self):
+        print("Building vulkan setup code")
         template = open("vuh-litmus-template.cpp", 'r')
         self.spirv_code()
         template_content = template.read()
