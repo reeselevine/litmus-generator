@@ -3,6 +3,8 @@
 #include <vector>
 #include <set>
 #include <string>
+#include <chrono>
+#include <iostream>
 
 const int minWorkgroups = {{ minWorkgroups }};
 const int maxWorkgroups = {{ maxWorkgroups }};
@@ -22,6 +24,7 @@ const int stressTargetLines = {{ stressTargetLines }};
 const int gpuDeviceId = {{ gpuDeviceId }};
 const char* testName = "{{ testName }}";
 const char* weakBehaviorStr = "{{ weakBehaviorStr }}";
+const int testIterations = {{ testIterations }};
 int weakBehavior = 0;
 int nonWeakBehavior = 0;
 const int sampleInterval = 1000;
@@ -53,7 +56,9 @@ public:
 	std::string testFile(testName);
 	testFile = testFile + ".spv";
         
-	for (int i = 0; i < {{ testIterations }}; i++) {
+	std::chrono::time_point<std::chrono::system_clock> start, end;
+	start = std::chrono::system_clock::now();
+	for (int i = 0; i < testIterations; i++) {
 	    auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
 	    int numWorkgroups = setNumWorkgroups();
 	    int workgroupSize = setWorkgroupSize();
@@ -68,6 +73,10 @@ public:
             program.grid(numWorkgroups).spec(workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
             checkResult(testData, results, memLocations);
 	}
+	end = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end - start;
+	std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n"; 
+	std::cout << "iterations per second: " << testIterations / elapsed_seconds.count() << " \n";
     }
 
     vuh::Device getDevice(vuh::Instance* instance) {
