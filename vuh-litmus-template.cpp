@@ -39,20 +39,20 @@ private:
 public:
     void run() {
 	printf("Starting %s litmus test run\n", testName);
-        auto instance = vuh::Instance();
+    auto instance = vuh::Instance();
 	auto device = getDevice(&instance);
 	printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
 	printf("Sampling output approximately every %i iterations\n", sampleInterval);
-        // setup devices, memory, and parameters
-        auto testData = Array(device, testMemorySize/sizeof(uint32_t));
+    // setup devices, memory, and parameters
+    auto testData = Array(device, testMemorySize/sizeof(uint32_t));
 	auto memLocations = Array(device, numMemLocations);
-        auto results = Array(device, numOutputs);
-        auto shuffleIds = Array(device, maxWorkgroups*maxWorkgroupSize);
-        auto barrier = Array(device, 1);
-        auto scratchpad = Array(device, scratchMemorySize/sizeof(uint32_t));
-        auto scratchLocations = Array(device, maxWorkgroups);
+    auto results = Array(device, numOutputs);
+    auto shuffleIds = Array(device, maxWorkgroups*maxWorkgroupSize);
+    auto barrier = Array(device, 1);
+    auto scratchpad = Array(device, scratchMemorySize/sizeof(uint32_t));
+    auto scratchLocations = Array(device, maxWorkgroups);
 	auto stressParams = Array(device, 3);
-        using SpecConstants = vuh::typelist<uint32_t>;
+    using SpecConstants = vuh::typelist<uint32_t>;
 	std::string testFile(testName);
 	testFile = testFile + ".spv";
         
@@ -62,16 +62,16 @@ public:
 	    auto program = vuh::Program<SpecConstants>(device, testFile.c_str());
 	    int numWorkgroups = setNumWorkgroups();
 	    int workgroupSize = setWorkgroupSize();
-            clearMemory(testData, testMemorySize/sizeof(uint32_t));
+        clearMemory(testData, testMemorySize/sizeof(uint32_t));
 	    setMemLocations(memLocations);
-            clearMemory(results, numOutputs);
-            setShuffleIds(shuffleIds, numWorkgroups, workgroupSize);
-            clearMemory(barrier, 1);
-            clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
-            setScratchLocations(scratchLocations, numWorkgroups);
+        clearMemory(results, numOutputs);
+        setShuffleIds(shuffleIds, numWorkgroups, workgroupSize);
+        clearMemory(barrier, 1);
+        clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
+        setScratchLocations(scratchLocations, numWorkgroups);
 	    setStressParams(stressParams);
-            program.grid(numWorkgroups).spec(workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
-            checkResult(testData, results, memLocations);
+        program.grid(numWorkgroups).spec(workgroupSize)(testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams);
+        checkResult(testData, results, memLocations);
 	}
 	end = std::chrono::system_clock::now();
 	std::chrono::duration<double> elapsed_seconds = end - start;
@@ -80,17 +80,17 @@ public:
     }
 
     vuh::Device getDevice(vuh::Instance* instance) {
-	vuh::Device device = instance->devices().at(0);
-	if (gpuDeviceId != -1) {
-	    for (vuh::Device _device : instance->devices()) {
-		if (_device.properties().deviceID == gpuDeviceId) {
-		    device = _device;
-		    break;
-		}
+	    vuh::Device device = instance->devices().at(0);
+	    if (gpuDeviceId != -1) {
+	        for (vuh::Device _device : instance->devices()) {
+		        if (_device.properties().deviceID == gpuDeviceId) {
+		            device = _device;
+		            break;
+		        }
+	        }
 	    }
-	}
-	printf("Using device %s\n", device.properties().deviceName);
-	return device;
+	    printf("Using device %s\n", device.properties().deviceName);
+	    return device;
     }
 
     void checkResult(Array &testData, Array &results, Array &memLocations) {
@@ -105,9 +105,9 @@ public:
     }
 
     void clearMemory(Array &gpuMem, int size) {
-	for (int i = 0; i < size; i++) {
-		gpuMem[i] = 0;
-	}
+	    for (int i = 0; i < size; i++) {
+		    gpuMem[i] = 0;
+	    }
     }
     
     void setShuffleIds(Array &ids, int numWorkgroups, int workgroupSize) {
@@ -142,12 +142,12 @@ public:
     }
 
     void setMemLocations(Array &locations) {
-	std::set<int> usedRegions;
+	    std::set<int> usedRegions;
         int numRegions = testMemorySize / memStride;
         for (int i = 0; i < numMemLocations; i++) {
             int region = rand() % numRegions;
             while(usedRegions.count(region))
-                region = rand() % numRegions;
+            region = rand() % numRegions;
             int locInRegion = rand() % (memStride/sizeof(uint32_t));
             locations[i] = (region * memStride)/sizeof(uint32_t) + locInRegion;
             usedRegions.insert(region);
@@ -158,12 +158,12 @@ public:
      * workgroups to specific stress locations. 
      */
     void setScratchLocations(Array &locations, int numWorkgroups) {
-	std::set <int> usedRegions;
+	    std::set <int> usedRegions;
         int numRegions = scratchMemorySize / stressLineSize;
         for (int i = 0; i < stressTargetLines; i++) {
             int region = rand() % numRegions;
             while(usedRegions.count(region))
-                region = rand() % numRegions;
+            region = rand() % numRegions;
             int locInRegion = rand() % (stressLineSize/sizeof(uint32_t));
             switch (stressAssignmentStrategy) {
                 case ROUND_ROBIN:
@@ -187,21 +187,21 @@ public:
     }
 
     int setWorkgroupSize() {
-	if (minWorkgroupSize == maxWorkgroupSize) {
-	    return minWorkgroupSize;
-	} else {
- 	    int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
+	    if (minWorkgroupSize == maxWorkgroupSize) {
+	        return minWorkgroupSize;
+	    } else {
+ 	        int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
             return minWorkgroupSize + size;
-	}
+	    }
     }
 
     int setNumWorkgroups() {
-	if (minWorkgroups == maxWorkgroups) {
-	    return minWorkgroups;
-	} else {
-	    int size = rand() % (maxWorkgroups - minWorkgroups);
+	    if (minWorkgroups == maxWorkgroups) {
+	        return minWorkgroups;
+	    } else {
+	        int size = rand() % (maxWorkgroups - minWorkgroups);
             return minWorkgroups + size;
-	}
+	    }
     }
 
     void setStressParams(Array &params) {
@@ -241,5 +241,3 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
-
-
