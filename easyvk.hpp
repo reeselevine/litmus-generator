@@ -73,8 +73,6 @@ namespace easyvk {
 		return computeFamilyId;
 	}
 
-
-
 	Device::Device(easyvk::Instance &_instance, vk::PhysicalDevice _physicalDevice) : 
 		instance(_instance),
 		physicalDevice(_physicalDevice),
@@ -146,5 +144,4 @@ namespace easyvk {
 			descriptorPool = device.device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, uint32_t(descriptorSizes.size()), descriptorSizes.data()});
 			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
 	}
-
 }
