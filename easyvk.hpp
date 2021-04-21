@@ -1,13 +1,12 @@
 #include <vulkan/vulkan.hpp>
 #include <vector>
+#include <array>
 #include <iostream>
-
+#include "easyvk.h"
 
 namespace easyvk {
 
-    class Instance {
-        public:
-            static auto VKAPI_ATTR debugReporter(
+	static auto VKAPI_ATTR debugReporter(
 	            VkDebugReportFlagsEXT , VkDebugReportObjectTypeEXT, uint64_t, size_t, int32_t
 	            , const char*                pLayerPrefix
 	            , const char*                pMessage
@@ -16,7 +15,7 @@ namespace easyvk {
 	            return VK_FALSE;
             }
 
-            Instance(bool _enableValidationLayers=false) {
+	Instance::Instance(bool _enableValidationLayers=false) {
 		enableValidationLayers = _enableValidationLayers;
                 std::vector<const char *> enabledLayers;
                 std::vector<const char *> enabledExtensions;
@@ -40,16 +39,16 @@ namespace easyvk {
                 }
             }
 
-	    std::vector<Device> devices() {
+	std::vector<easyvk::Device> Instance::devices() {
                 auto physicalDevices = instance.enumeratePhysicalDevices();
-	        auto devices = std::vector<Device>{};
+	        auto devices = std::vector<easyvk::Device>{};
 		for (auto device : physicalDevices) {
-		    devices.push_back(Device(*this, device));
+		    devices.push_back(easyvk::Device(*this, device));
 		}
 		return devices;
 	    }
 
-	    auto clear() {
+	void Instance::clear() {
 	        if (enableValidationLayers) {
 		    auto destroyFn = PFN_vkDestroyDebugReportCallbackEXT(instance.getProcAddr("vkDestroyDebugReportCallbackEXT"));
 		    if (destroyFn) {
@@ -57,39 +56,53 @@ namespace easyvk {
 		    }
 		}
 		instance.destroy();
-	    }
-        private:
-	    bool enableValidationLayers;
-            vk::Instance instance;
-	    VkDebugReportCallbackEXT debugReportCallback;
-    };
+	}
 
-    class Device {
-        public:
-	   Device(Instance &instance, vk::PhysicalDevice _physicalDevice) {
-	       physicalDevice = _physicalDevice;
-               auto familyProperties = physical_device.getQueueFamilyProperties();
-	       uint32_t i = 0;
-	       for (auto queueFamily : familyProperties) {
-		   if (queueFamily.queueCount > 0 && (queueFamily.queueFlags && vk::QueueFlagBits::eCompute)) {
-		       computeFamilyId = i;; 
-		       break;
-		   }
-		   i++;
-	       }
+	uint32_t getComputeFamilyId(vk::PhysicalDevice physicalDevice) {
+		auto familyProperties = physicalDevice.getQueueFamilyProperties();
+		uint32_t i = 0;
+		uint32_t computeFamilyId = -1;
+		for (auto queueFamily : familyProperties) {
+			if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & vk::QueueFlagBits::eCompute)) {
+				computeFamilyId = i;; 
+				break;
+			}
+			i++;
+		}
+		return computeFamilyId;
+	}
 
-	       auto queueCreateInfo = vk::DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags(), computeFamilyId, 1, float(1.0));
-	       auto deviceCreateInfo = vk::DeviceCreateInfo(vk::DeviceCreateFlags(), 1, {queueCreateInfo});
-	       device = physicalDevice.createDevice(deviceCreateInfo, nullptr);
-	   } 
 
-        private:
-	    Instance &_instance;
-	    vk::PhysicalDevice physicalDevice;
-	    vk::Device device;
-	    vk::CommandPool    computePool;
-	    vk::CommandBuffer  computeCommandBuffer;
-	    uint32_t computeFamilyId = uint32_t(-1);
-    };
 
+	Device::Device(easyvk::Instance &_instance, vk::PhysicalDevice _physicalDevice) : 
+		instance(_instance),
+		physicalDevice(_physicalDevice),
+		computeFamilyId(getComputeFamilyId(_physicalDevice)) {
+		auto priority = float(1.0);
+		auto queues = std::array<vk::DeviceQueueCreateInfo, 1>{};
+		queues[0] = vk::DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags(), computeFamilyId, 1, &priority);
+		auto deviceCreateInfo = vk::DeviceCreateInfo(vk::DeviceCreateFlags(), 1, queues.data());
+		device = physicalDevice.createDevice(deviceCreateInfo, nullptr);
+	}
+
+	uint32_t Device::selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags) {
+		auto memProperties = physicalDevice.getMemoryProperties();
+		auto memoryReqs = device.getBufferMemoryRequirements(buffer);
+		for(uint32_t i = 0; i < memProperties.memoryTypeCount; ++i){
+			if( (memoryReqs.memoryTypeBits & (1u << i))
+			    && ((flags & memProperties.memoryTypes[i].propertyFlags) == flags))
+			{
+				return i;
+			}
+		}
+		return uint32_t(-1);
+	}
+
+	Buffer::Buffer(easyvk::Device &_device, uint32_t size) :
+		device(_device),
+		buffer(device.device.createBuffer({ {}, size * sizeof(uint32_t), vk::BufferUsageFlagBits::eStorageBuffer})) {
+		auto memId = device.selectMemory(buffer, vk::MemoryPropertyFlagBits::eHostVisible);
+		memory = device.device.allocateMemory({device.device.getBufferMemoryRequirements(buffer).size, memId});
+		device.device.bindBufferMemory(buffer, memory, 0);
+	}
 }
