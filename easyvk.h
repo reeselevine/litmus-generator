@@ -33,11 +33,26 @@ namespace easyvk {
 	class Buffer {
 		public:
 			Buffer(Device &device, uint32_t size);
+			vk::Buffer buffer;
 		private:
 			easyvk::Device &device;
-			vk::Buffer buffer;
 			vk::DeviceMemory memory;
 			uint32_t size;
 			uint32_t* data;
 	};
+
+	class Program {
+		public:
+			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers);
+		private:
+			vk::ShaderModule shaderModule;
+			easyvk::Device &device;
+			vk::DescriptorSetLayout descriptorSetLayout;
+			vk::DescriptorPool descriptorPool;
+			vk::DescriptorSet descriptorSet;
+			vk::PipelineLayout pipelineLayout;
+			vk::Pipeline pipeline;
+			std::array<uint32_t, 3> workgroups={0, 0, 0};
+	};
+
 }

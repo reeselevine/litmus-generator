@@ -3,6 +3,7 @@
 #include <array>
 #include <iostream>
 #include "easyvk.h"
+#include <fstream>
 
 namespace easyvk {
 
@@ -105,4 +106,45 @@ namespace easyvk {
 		memory = device.device.allocateMemory({device.device.getBufferMemoryRequirements(buffer).size, memId});
 		device.device.bindBufferMemory(buffer, memory, 0);
 	}
+
+	std::vector<uint32_t> read_spirv(const char* filename) {
+		auto fin = std::ifstream(filename, std::ios::binary | std::ios::ate);
+		if(!fin.is_open()){
+			throw std::runtime_error(std::string("failed opening file ") + filename + " for reading");
+		}
+		const auto stream_size = unsigned(fin.tellg());
+		fin.seekg(0);
+
+		auto ret = std::vector<std::uint32_t>((stream_size + 3)/4, 0);
+		std::copy( std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>()
+	         	  , reinterpret_cast<char*>(ret.data()));
+		return ret;
+	}
+
+	vk::ShaderModule initShaderModule(easyvk::Device& device, const char* filepath) {
+		std::vector<uint32_t> code = read_spirv(filepath);
+		return device.device.createShaderModule({ {}, code.size() * sizeof(uint32_t), code.data()});
+	}
+
+	vk::DescriptorSetLayout createDescriptorSetLayout(easyvk::Device &device, uint32_t size) {
+		std::vector<vk::DescriptorSetLayoutBinding> layouts;
+		for (int i = 0; i < size; i++) {
+			layouts.push_back(vk::DescriptorSetLayoutBinding(i, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute));
+		}
+		auto createInfo = vk::DescriptorSetLayoutCreateInfo(vk::DescriptorSetLayoutCreateFlags(), uint32_t(size), layouts.data());
+		return device.device.createDescriptorSetLayout(createInfo);
+	}
+
+	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers) :
+		device(_device),
+	        shaderModule(initShaderModule(_device, filepath)),
+		descriptorSetLayout(createDescriptorSetLayout(_device, buffers.size())) {
+			vk::PipelineLayoutCreateInfo createInfo(vk::PipelineLayoutCreateFlags(), 1, &descriptorSetLayout);
+			pipelineLayout = device.device.createPipelineLayout(createInfo);
+			auto poolSize = vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, buffers.size());
+			auto descriptorSizes = std::array<vk::DescriptorPoolSize, 1>({poolSize});
+			descriptorPool = device.device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, uint32_t(descriptorSizes.size()), descriptorSizes.data()});
+			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
+	}
+
 }
