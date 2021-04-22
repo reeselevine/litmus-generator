@@ -143,5 +143,9 @@ namespace easyvk {
 			auto descriptorSizes = std::array<vk::DescriptorPoolSize, 1>({poolSize});
 			descriptorPool = device.device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, uint32_t(descriptorSizes.size()), descriptorSizes.data()});
 			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
+			auto stageCI = vk::PipelineShaderStageCreateInfo(vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "litmus_test", nullptr);
+			auto pipelineCI = vk::ComputePipelineCreateInfo({}, stageCI, pipelineLayout);
+			device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
 	}
+	
 }
