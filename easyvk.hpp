@@ -133,6 +133,17 @@ namespace easyvk {
 		return device.device.createDescriptorSetLayout(createInfo);
 	}
 
+	std::vector<vk::WriteDescriptorSet> writeSets(vk::DescriptorSet& descriptorSet, std::vector<easyvk::Buffer> buffers) {
+		std::vector<vk::WriteDescriptorSet> writeDescriptorSets;
+		std::vector<vk::DescriptorBufferInfo> bufferInfos;
+		for (int i = 0; i < buffers.size(); i++) {
+			bufferInfos.push_back(vk::DescriptorBufferInfo(buffers[i].buffer, 0, VK_WHOLE_SIZE));
+			writeDescriptorSets.push_back(vk::WriteDescriptorSet(descriptorSet, i, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &bufferInfos[i], nullptr));
+		}
+		return writeDescriptorSets;
+
+	}
+
 	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers) :
 		device(_device),
 	        shaderModule(initShaderModule(_device, filepath)),
@@ -143,6 +154,7 @@ namespace easyvk {
 			auto descriptorSizes = std::array<vk::DescriptorPoolSize, 1>({poolSize});
 			descriptorPool = device.device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, uint32_t(descriptorSizes.size()), descriptorSizes.data()});
 			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
+			device.device.updateDescriptorSets(writeSets(descriptorSet, buffers), {});
 			auto stageCI = vk::PipelineShaderStageCreateInfo(vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "litmus_test", nullptr);
 			auto pipelineCI = vk::ComputePipelineCreateInfo({}, stageCI, pipelineLayout);
 			device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
