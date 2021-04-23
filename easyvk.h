@@ -22,11 +22,12 @@ namespace easyvk {
 			Device(Instance &_instance, vk::PhysicalDevice _physicalDevice);
 			vk::Device device;
 			uint32_t selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags);
+			vk::Queue computeQueue();
+			vk::CommandBuffer computeCommandBuffer;
 		private:
 			Instance &instance;
 			vk::PhysicalDevice physicalDevice;
 			vk::CommandPool computePool;
-			vk::CommandBuffer computeCommandBuffer;
 			uint32_t computeFamilyId = uint32_t(-1);
 	};
 
@@ -43,7 +44,8 @@ namespace easyvk {
 
 	class Program {
 		public:
-			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers);
+			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers, int numWorkgroups);
+			void run();
 		private:
 			vk::ShaderModule shaderModule;
 			easyvk::Device &device;

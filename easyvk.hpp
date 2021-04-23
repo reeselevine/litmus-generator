@@ -82,6 +82,9 @@ namespace easyvk {
 		queues[0] = vk::DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags(), computeFamilyId, 1, &priority);
 		auto deviceCreateInfo = vk::DeviceCreateInfo(vk::DeviceCreateFlags(), 1, queues.data());
 		device = physicalDevice.createDevice(deviceCreateInfo, nullptr);
+		computePool = device.createCommandPool({vk::CommandPoolCreateFlagBits::eResetCommandBuffer, computeFamilyId});
+		auto commandBufferAI = vk::CommandBufferAllocateInfo(computePool, vk::CommandBufferLevel::ePrimary, 1);
+		computeCommandBuffer = device.allocateCommandBuffers(commandBufferAI)[0];
 	}
 
 	uint32_t Device::selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags) {
@@ -95,6 +98,10 @@ namespace easyvk {
 			}
 		}
 		return uint32_t(-1);
+	}
+
+	vk::Queue Device::computeQueue() {
+		return device.getQueue(computeFamilyId, 0);
 	}
 
 	Buffer::Buffer(easyvk::Device &_device, uint32_t size) :
@@ -144,7 +151,14 @@ namespace easyvk {
 
 	}
 
-	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers) :
+	void Program::run() {
+		auto submitInfo = vk::SubmitInfo(0, nullptr, nullptr, 1, &device.computeCommandBuffer);
+		auto queue = device.computeQueue();
+		queue.submit({submitInfo}, nullptr);
+		queue.waitIdle();
+	}
+
+	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers, int numWorkgroups) :
 		device(_device),
 	        shaderModule(initShaderModule(_device, filepath)),
 		descriptorSetLayout(createDescriptorSetLayout(_device, buffers.size())) {
@@ -157,7 +171,13 @@ namespace easyvk {
 			device.device.updateDescriptorSets(writeSets(descriptorSet, buffers), {});
 			auto stageCI = vk::PipelineShaderStageCreateInfo(vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "litmus_test", nullptr);
 			auto pipelineCI = vk::ComputePipelineCreateInfo({}, stageCI, pipelineLayout);
-			device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
+			pipeline = device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
+			device.computeCommandBuffer.begin(vk::CommandBufferBeginInfo());
+			device.computeCommandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+			device.computeCommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipelineLayout, 0, {descriptorSet}, {});
+			device.computeCommandBuffer.dispatch(numWorkgroups, 1, 1);
+			device.computeCommandBuffer.end();
+
 	}
 	
 }
