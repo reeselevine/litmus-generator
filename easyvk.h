@@ -35,6 +35,9 @@ namespace easyvk {
 		public:
 			Buffer(Device &device, uint32_t size);
 			vk::Buffer buffer;
+			uint32_t operator[](size_t i) {
+				return *(data + i);
+			}
 		private:
 			easyvk::Device &device;
 			vk::DeviceMemory memory;

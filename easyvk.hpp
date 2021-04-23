@@ -110,6 +110,7 @@ namespace easyvk {
 		auto memId = device.selectMemory(buffer, vk::MemoryPropertyFlagBits::eHostVisible);
 		memory = device.device.allocateMemory({device.device.getBufferMemoryRequirements(buffer).size, memId});
 		device.device.bindBufferMemory(buffer, memory, 0);
+		data = static_cast<uint32_t*>(device.device.mapMemory(memory, 0, VK_WHOLE_SIZE));
 	}
 
 	std::vector<uint32_t> read_spirv(const char* filename) {
