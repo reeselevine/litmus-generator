@@ -47,8 +47,9 @@ namespace easyvk {
 
 	class Program {
 		public:
-			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers, int numWorkgroups);
+			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers);
 			void run();
+			void setWorkgroups(uint32_t workgroups);
 		private:
 			vk::ShaderModule shaderModule;
 			easyvk::Device &device;
@@ -57,7 +58,7 @@ namespace easyvk {
 			vk::DescriptorSet descriptorSet;
 			vk::PipelineLayout pipelineLayout;
 			vk::Pipeline pipeline;
-			std::array<uint32_t, 3> workgroups={0, 0, 0};
+			uint32_t numWorkgroups;
 	};
 
 }
