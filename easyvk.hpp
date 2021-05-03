@@ -152,12 +152,21 @@ namespace easyvk {
 
 	}
 
-	void Program::run() {
+	void Program::prepare() {
+		vk::SpecializationMapEntry specMap[1] = {vk::SpecializationMapEntry(0, 0, sizeof(uint32_t))};
+		uint32_t specMapContent[1] = {workgroupSize};
+		auto specInfo = vk::SpecializationInfo(1, specMap, sizeof(uint32_t), specMapContent);
+		auto stageCI = vk::PipelineShaderStageCreateInfo(vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "litmus_test", &specInfo);
+		auto pipelineCI = vk::ComputePipelineCreateInfo({}, stageCI, pipelineLayout);
+		pipeline = device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
 		device.computeCommandBuffer.begin(vk::CommandBufferBeginInfo());
 		device.computeCommandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
 		device.computeCommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipelineLayout, 0, {descriptorSet}, {});
 		device.computeCommandBuffer.dispatch(numWorkgroups, 1, 1);
 		device.computeCommandBuffer.end();
+	}
+
+	void Program::run() {
 		auto submitInfo = vk::SubmitInfo(0, nullptr, nullptr, 1, &device.computeCommandBuffer);
 		auto queue = device.computeQueue();
 		queue.submit({submitInfo}, nullptr);
@@ -166,6 +175,10 @@ namespace easyvk {
 
 	void Program::setWorkgroups(uint32_t _numWorkgroups) {
 		numWorkgroups = _numWorkgroups;
+	}
+
+	void Program::setWorkgroupSize(uint32_t _workgroupSize) {
+		workgroupSize = _workgroupSize;
 	}
 
 	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers) :
@@ -179,9 +192,6 @@ namespace easyvk {
 			descriptorPool = device.device.createDescriptorPool({vk::DescriptorPoolCreateFlags(), 1, uint32_t(descriptorSizes.size()), descriptorSizes.data()});
 			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
 			device.device.updateDescriptorSets(writeSets(descriptorSet, buffers), {});
-			auto stageCI = vk::PipelineShaderStageCreateInfo(vk::PipelineShaderStageCreateFlags(), vk::ShaderStageFlagBits::eCompute, shaderModule, "litmus_test", nullptr);
-			auto pipelineCI = vk::ComputePipelineCreateInfo({}, stageCI, pipelineLayout);
-			pipeline = device.device.createComputePipeline(nullptr, pipelineCI, nullptr);
 	}
 	
 }

@@ -48,8 +48,10 @@ namespace easyvk {
 	class Program {
 		public:
 			Program(Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers);
+			void prepare();
 			void run();
-			void setWorkgroups(uint32_t workgroups);
+			void setWorkgroups(uint32_t _numWorkgroups);
+			void setWorkgroupSize(uint32_t _workgroupSize);
 		private:
 			vk::ShaderModule shaderModule;
 			easyvk::Device &device;
@@ -59,6 +61,7 @@ namespace easyvk {
 			vk::PipelineLayout pipelineLayout;
 			vk::Pipeline pipeline;
 			uint32_t numWorkgroups;
+			uint32_t workgroupSize;
 	};
 
 }
