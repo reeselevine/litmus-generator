@@ -21,6 +21,7 @@ namespace easyvk {
 		public:
 			Device(Instance &_instance, vk::PhysicalDevice _physicalDevice);
 			vk::Device device;
+			vk::PhysicalDeviceProperties properties();
 			uint32_t selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags);
 			vk::Queue computeQueue();
 			vk::CommandBuffer computeCommandBuffer;
@@ -36,9 +37,13 @@ namespace easyvk {
 		public:
 			Buffer(Device &device, uint32_t size);
 			vk::Buffer buffer;
+			uint32_t* operator[](size_t i) {
+				return data + i;
+			}
 			uint32_t operator[](size_t i) {
 				return *(data + i);
 			}
+
 			void teardown();
 		private:
 			easyvk::Device &device;

@@ -1,5 +1,5 @@
 {
-    "testIterations": 10000,
+    "testIterations": 1000,
     "maxWorkgroups": 36,
     "maxWorkgroupSize": 1024,
     "testMemorySize": 1024,
@@ -15,6 +15,7 @@
     "stressIterations": 1000,
     "preStressPct": 100,
     "preStressPattern": ["load", "load"],
-    "preStressIterations": 100
+    "preStressIterations": 100,
+    "gpuDeviceId": 7857
 }
 

@@ -87,6 +87,10 @@ namespace easyvk {
 		computeCommandBuffer = device.allocateCommandBuffers(commandBufferAI)[0];
 	}
 
+	vk::PhysicalDeviceProperties Device::properties() {
+		return physicalDevice.getProperties();
+	}
+
 	uint32_t Device::selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags) {
 		auto memProperties = physicalDevice.getMemoryProperties();
 		auto memoryReqs = device.getBufferMemoryRequirements(buffer);
@@ -119,6 +123,7 @@ namespace easyvk {
 	}
 
 	void Buffer::teardown() {
+		device.device.unmapMemory(memory);
 		device.device.freeMemory(memory);
 		device.device.destroyBuffer(buffer);
 	}

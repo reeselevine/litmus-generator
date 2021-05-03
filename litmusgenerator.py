@@ -283,7 +283,7 @@ class LitmusTest:
 
     def generate_vulkan_setup(self):
         print("Building vulkan setup code")
-        template = open("vuh-litmus-template.cpp", 'r')
+        template = open("litmus-template.cpp", 'r')
         self.spirv_code()
         template_content = template.read()
         template.close()
