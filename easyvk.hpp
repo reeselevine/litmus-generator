@@ -49,7 +49,7 @@ namespace easyvk {
 		return devices;
 	    }
 
-	void Instance::clear() {
+	void Instance::teardown() {
 	        if (enableValidationLayers) {
 		    auto destroyFn = PFN_vkDestroyDebugReportCallbackEXT(instance.getProcAddr("vkDestroyDebugReportCallbackEXT"));
 		    if (destroyFn) {
@@ -104,6 +104,11 @@ namespace easyvk {
 		return device.getQueue(computeFamilyId, 0);
 	}
 
+	void Device::teardown() {
+		device.destroyCommandPool(computePool);
+		device.destroy();
+	}
+
 	Buffer::Buffer(easyvk::Device &_device, uint32_t size) :
 		device(_device),
 		buffer(device.device.createBuffer({ {}, size * sizeof(uint32_t), vk::BufferUsageFlagBits::eStorageBuffer})) {
@@ -111,6 +116,11 @@ namespace easyvk {
 		memory = device.device.allocateMemory({device.device.getBufferMemoryRequirements(buffer).size, memId});
 		device.device.bindBufferMemory(buffer, memory, 0);
 		data = static_cast<uint32_t*>(device.device.mapMemory(memory, 0, VK_WHOLE_SIZE));
+	}
+
+	void Buffer::teardown() {
+		device.device.freeMemory(memory);
+		device.device.destroyBuffer(buffer);
 	}
 
 	std::vector<uint32_t> read_spirv(const char* filename) {
@@ -181,9 +191,10 @@ namespace easyvk {
 		workgroupSize = _workgroupSize;
 	}
 
-	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> buffers) :
+	Program::Program(easyvk::Device &_device, const char* filepath, std::vector<easyvk::Buffer> _buffers) :
 		device(_device),
 	        shaderModule(initShaderModule(_device, filepath)),
+		buffers(_buffers),
 		descriptorSetLayout(createDescriptorSetLayout(_device, buffers.size())) {
 			vk::PipelineLayoutCreateInfo createInfo(vk::PipelineLayoutCreateFlags(), 1, &descriptorSetLayout);
 			pipelineLayout = device.device.createPipelineLayout(createInfo);
@@ -193,5 +204,12 @@ namespace easyvk {
 			descriptorSet = device.device.allocateDescriptorSets({descriptorPool, 1, &descriptorSetLayout})[0];
 			device.device.updateDescriptorSets(writeSets(descriptorSet, buffers), {});
 	}
-	
+
+	void Program::teardown() {
+		device.device.destroyShaderModule(shaderModule);
+		device.device.destroyDescriptorPool(descriptorPool);
+		device.device.destroyDescriptorSetLayout(descriptorSetLayout);
+		device.device.destroyPipelineLayout(pipelineLayout);
+		device.device.destroyPipeline(pipeline);
+	}
 }

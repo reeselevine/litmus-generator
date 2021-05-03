@@ -10,7 +10,7 @@ namespace easyvk {
 		public:
 			Instance(bool _enableValidationLayers);
 			std::vector<easyvk::Device> devices();
-			void clear();
+			void teardown();
 		private:
 			bool enableValidationLayers;
 			vk::Instance instance;
@@ -24,6 +24,7 @@ namespace easyvk {
 			uint32_t selectMemory(vk::Buffer buffer, vk::MemoryPropertyFlags flags);
 			vk::Queue computeQueue();
 			vk::CommandBuffer computeCommandBuffer;
+			void teardown();
 		private:
 			Instance &instance;
 			vk::PhysicalDevice physicalDevice;
@@ -38,6 +39,7 @@ namespace easyvk {
 			uint32_t operator[](size_t i) {
 				return *(data + i);
 			}
+			void teardown();
 		private:
 			easyvk::Device &device;
 			vk::DeviceMemory memory;
@@ -52,7 +54,9 @@ namespace easyvk {
 			void run();
 			void setWorkgroups(uint32_t _numWorkgroups);
 			void setWorkgroupSize(uint32_t _workgroupSize);
+			void teardown();
 		private:
+			std::vector<easyvk::Buffer> buffers;
 			vk::ShaderModule shaderModule;
 			easyvk::Device &device;
 			vk::DescriptorSetLayout descriptorSetLayout;

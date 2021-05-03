@@ -1,2 +1,0 @@
-2.) Specialization constant for workgroup size
-3.) Clean up resources
