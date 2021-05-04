@@ -15,7 +15,7 @@ def generate(test_config, parameter_config):
     litmus_test.generate()
 
 def run(test_name, check_output):
-    subprocess.run(["/usr/bin/c++", "-I/shared/vuh-sources/include", "-std=gnu++14", "-o", "exec", "{}.cpp".format(test_name), "-lvuh", "-lvulkan"])
+    subprocess.run(["/usr/bin/c++", "-I/shared/vuh-sources/include", "-std=gnu++14", "-o", "exec", "{}.cpp".format(test_name), "-L./lib", "-leasyvk", "-lvulkan"])
     if check_output:
         output = subprocess.check_output(["./exec"])
         print(output.decode())
