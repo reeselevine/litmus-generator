@@ -37,10 +37,12 @@ namespace easyvk {
 		public:
 			Buffer(Device &device, uint32_t size);
 			vk::Buffer buffer;
-			uint32_t* operator[](size_t i) {
-				return data + i;
+
+			void store(size_t i, uint32_t value) {
+				*(data + i) = value;
 			}
-			uint32_t operator[](size_t i) {
+
+			uint32_t load(size_t i) {
 				return *(data + i);
 			}
 
