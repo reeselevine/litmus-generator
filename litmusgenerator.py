@@ -41,13 +41,13 @@ class LitmusTest:
             "store": {
                 "store": ["{} = i + 1;".format(stress_mem_location)],
                 "load": ["uint tmp1 = {};".format(stress_mem_location),
-                    "if (tmp1 > 100) {", "{} = get_local_id(0);".format(stress_mem_location),
+                    "if (tmp1 > 100) {", "break;",
                     "}"]
             },
             "load": {
                 "store": ["{} = i;".format(stress_mem_location)],
                 "load": ["uint tmp2 = {};".format(stress_mem_location),
-                    "if (tmp2 > 100) {", "{} = get_local_id(0);".format(stress_mem_location),
+                    "if (tmp2 > 100) {", "break;",
                     "}"]
             }
         }
