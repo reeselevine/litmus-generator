@@ -24,6 +24,9 @@ def run(test_name, check_output):
         subprocess.run(["./exec"])
         return None
 
+def tune(test_config, parameter_config):
+     print("Tuning {} litmus test".format(test_config['testName']))
+
 def store_output(test_name, parameter_config, output, output_file_name):
     groups = re.search("weak behavior: (.*)\nnon weak behavior: (.*)\n", output)
     weak_behaviors = int(groups.group(1))
@@ -67,6 +70,7 @@ def parse_args():
     group.add_argument("-grv", "--generate_and_run_variants", action="store_true", help="Generate variants of the litmus test and run them")
     parser.add_argument("--offset", help="When running a variant, which variant offset to start at")
     parser.add_argument("--outputfile", help="Output file to store results when running tests")
+    parser.add_argument("--tune", action="store_true", help="Tune parameter config, should only be used when generating and running a test")
     return parser.parse_args()
 
 def main():
@@ -80,10 +84,13 @@ def main():
         generate(test_config, parameter_config)
     elif args.generate_and_run:
         test_config, parameter_config = load_config(args, args.test_name)
-        generate(test_config, parameter_config)
-        output = run(test_config['testName'], check_output)
-        if output != None:
-            store_output(test_config['testName'], parameter_config, output, args.outputfile)
+        if args.tune:
+            tune(test_config, parameter_config)
+        else:
+            generate(test_config, parameter_config)
+            output = run(test_config['testName'], check_output)
+            if output != None:
+                store_output(test_config['testName'], parameter_config, output, args.outputfile)
     elif args.generate_and_run_variants:
         if args.offset:
             offset = args.offset
