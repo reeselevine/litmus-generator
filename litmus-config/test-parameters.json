@@ -16,6 +16,6 @@
     "preStressPct": 100,
     "preStressPattern": ["load", "load"],
     "preStressIterations": 100,
-    "gpuDeviceId": 16024
+    "gpuDeviceId": 7857
 }
 
