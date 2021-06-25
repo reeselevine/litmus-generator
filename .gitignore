@@ -2,6 +2,7 @@
 *.cl
 *.cpp
 !vuh-litmus-template.cpp
+!litmus-template.cpp
 *-variants
 !minimally-forbidden-variants
 exec

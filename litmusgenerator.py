@@ -200,11 +200,11 @@ class LitmusTest:
             sample_ids.append("{}: %u".format(post_condition.identifier))
             weak_values.append("{}: {}".format(post_condition.identifier, post_condition.value))
             if post_condition.output_type == "variable":
-                sample_values.append("results[{}]".format(self.variables[post_condition.identifier]))
-                conditions.append("results[{}] == {}".format(self.variables[post_condition.identifier], post_condition.value))
+                sample_values.append("results.load({})".format(self.variables[post_condition.identifier]))
+                conditions.append("results.load({}) == {}".format(self.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
-                sample_values.append("testData[memLocations[{}]]".format(self.memory_locations[post_condition.identifier]))
-                conditions.append("testData[memLocations[{}]] == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
+                sample_values.append("testData.load(memLocations.load({}))".format(self.memory_locations[post_condition.identifier]))
+                conditions.append("testData.load(memLocations.load({})) == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
         self.template_replacements['weakBehaviorStr'] = ", ".join(weak_values)
         self.template_replacements['postConditionSample'] = """printf("{}\\n", {});""".format(", ".join(sample_ids), ",".join(sample_values))
         self.template_replacements['postCondition'] = " && ".join(conditions)
@@ -283,7 +283,7 @@ class LitmusTest:
 
     def generate_vulkan_setup(self):
         print("Building vulkan setup code")
-        template = open("vuh-litmus-template.cpp", 'r')
+        template = open("litmus-template.cpp", 'r')
         self.spirv_code()
         template_content = template.read()
         template.close()
