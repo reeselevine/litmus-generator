@@ -52,7 +52,7 @@ public:
 	    auto stressParams = easyvk::Buffer(device, 3);
 	    std::vector<easyvk::Buffer> testBuffers = {testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams};
 	    std::string testFile(testName);
-	    testFile = testFile + ".spv";
+	    testFile = "target/" + testFile + ".spv";
 	    
 	    std::chrono::time_point<std::chrono::system_clock> start, end;
 	    start = std::chrono::system_clock::now();

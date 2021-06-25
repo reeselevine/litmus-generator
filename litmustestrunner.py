@@ -1,13 +1,16 @@
 import argparse
 import json
 import subprocess
-import litmusgenerator
 import re
 import csv
 import os.path
+import litmusgenerator
+import litmusenv
 
 DEFAULT_TEST_PARAMETERS_FILE="litmus-config/test-parameters.json"
 DEFAULT_CONFIG_DIR="litmus-config/"
+
+env = litmusenv.LitmusEnv()
 
 def generate(test_config, parameter_config):
     print("Generating {} litmus test".format(test_config['testName']))
@@ -15,13 +18,13 @@ def generate(test_config, parameter_config):
     litmus_test.generate()
 
 def run(test_name, check_output):
-    subprocess.run(["/usr/bin/c++", "-I/shared/vuh-sources/include", "-I/shared/easyvk/include", "-std=gnu++14", "-o", "exec", "{}.cpp".format(test_name), "-leasyvk", "-lvulkan"])
+    subprocess.run([env.get("cppCompiler"), "-I{}".format(env.get("vulkanHeaders")), "-I{}".format(env.get("easyvkHeader")), "-std=gnu++14", "-o", "target/{}".format(test_name), "target/{}.cpp".format(test_name), "-leasyvk", "-lvulkan"])
     if check_output:
-        output = subprocess.check_output(["./exec"])
+        output = subprocess.check_output(["./target/{}".format(test_name)])
         print(output.decode())
         return output.decode()
     else:
-        subprocess.run(["./exec"])
+        subprocess.run(["./target/{}".format(test_name)])
         return None
 
 def tune(test_config, parameter_config):
@@ -36,22 +39,22 @@ def store_output(test_name, parameter_config, output, output_file_name):
     output_fields['weakBehaviors'] = weak_behaviors
     output_fields['nonWeakBehaviors'] = non_weak_behaviors
     exists = os.path.exists(output_file_name)
-    output_file = open(output_file_name, "a")
-    writer = csv.DictWriter(output_file, fieldnames=list(output_fields.keys()))
-    if not exists:
-        writer.writeheader()
-    writer.writerow(output_fields)
-    output_file.close()
+    with open(output_file_name, "a") as output_file:
+        writer = csv.DictWriter(output_file, fieldnames=list(output_fields.keys()))
+        if not exists:
+            writer.writeheader()
+        writer.writerow(output_fields)
 
 def load_config(args, test_file_name):
-    test_config_file = open(config_dir(args) + test_file_name + ".json", "r")
-    if args.paramsfile:
-        parameter_config_file = open(args.paramsfile, "r")
-    else:
-        parameter_config_file = open(DEFAULT_TEST_PARAMETERS_FILE, "r")
-    test_config = json.loads(test_config_file.read())
-    parameter_config = json.loads(parameter_config_file.read())
-    return (test_config, parameter_config)
+    with open(config_dir(args) + test_file_name + ".json", "r") as test_config_file:
+        if args.paramsfile:
+            parameter_config_file = open(args.paramsfile, "r")
+        else:
+            parameter_config_file = open(DEFAULT_TEST_PARAMETERS_FILE, "r")
+        test_config = json.loads(test_config_file.read())
+        parameter_config = json.loads(parameter_config_file.read())
+        parameter_config_file.close()
+        return (test_config, parameter_config)
 
 def config_dir(args):
     if args.configdir:

@@ -1,7 +1,11 @@
 import sys
+import os
 import argparse
 import json
 import subprocess
+import litmusenv
+
+env = litmusenv.LitmusEnv()
 
 class LitmusTest:
 
@@ -244,9 +248,10 @@ class LitmusTest:
         kernel = "\n".join([kernel_func_def] + body_statements + ["}\n"])
         spin_func = self.generate_spin()
         kernel = "\n\n".join([spin_func, kernel])
-        output_file = open(self.test_name + ".cl", "w")
-        output_file.write(kernel)
-        output_file.close()
+        filename = "target/" + self.test_name + ".cl"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, "w") as output_file:
+            output_file.write(kernel)
 
     def generate_spin(self):
         header = "static void spin(__global atomic_uint* barrier) {"
@@ -279,19 +284,17 @@ class LitmusTest:
 
     def spirv_code(self):
         print("Generating SPIRV code")
-        subprocess.run(["/shared/clspv/build/bin/clspv", "--cl-std=CL2.0", "--inline-entry-points", self.test_name + ".cl", "-o",  self.test_name + ".spv"])
+        subprocess.run([env.get("clspv"), "--cl-std=CL2.0", "--inline-entry-points", "target/" + self.test_name + ".cl", "-o",  "target/" + self.test_name + ".spv"])
 
     def generate_vulkan_setup(self):
         print("Building vulkan setup code")
-        template = open("litmus-template.cpp", 'r')
-        self.spirv_code()
-        template_content = template.read()
-        template.close()
+        with open("litmus-config/litmus-template.cpp", 'r') as template:
+            self.spirv_code()
+            template_content = template.read()
         for key in self.template_replacements:
             template_content = template_content.replace("{{ " + key + " }}", str(self.template_replacements[key]))
-        output_file = open(self.test_name + ".cpp", "w")
-        output_file.write(template_content)
-        output_file.close()
+        with open("target/" + self.test_name + ".cpp", "w") as output_file:
+            output_file.write(template_content)
 
 def main(argv):
     test_config_file_name = argv[1]
@@ -302,7 +305,8 @@ def main(argv):
     parameter_config = json.loads(parameter_config_file.read())
     litmus_test = LitmusTest(test_config, parameter_config)
     litmus_test.generate()
+    test_config_file.close()
+    parameter_config_file.close()
 
 if __name__ == '__main__':
     main(sys.argv)
-
