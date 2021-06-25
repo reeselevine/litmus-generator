@@ -4,16 +4,14 @@ Vulkan is a modern API for GPU programming, allowing code to be written once and
 
 ## Dependencies
 
-This tool depends on [clspv](https://github.com/google/clspv) for compiling OpenCL to SPIR-V and [vuh](https://github.com/Glavnokoman/vuh) for working with the Vulkan API. Currently, the tool is dependent on clspv and vuh being availabe in specific directories; this will hopefully change in the future. 
-
-While the tool should include the right directories for linking, ensure that vuh is available on the library load path by setting `LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib`
+This tool depends on [clspv](https://github.com/google/clspv) for compiling OpenCL to SPIR-V and [easyvk](https://github.com/reeselevine/easyvk) and [vulkan-headers](https://github.com/KhronosGroup/Vulkan-Headers) for working with the Vulkan API. Install locations for the header files should be specified in `litmus-config/env.json`, and the installed binaries should be added to the `LD_LIBRARY_PATH`.
 
 ## Lifecycle of a test
 A litmus test starts out as a json configuration file which defines the set of actions each thread takes and an associated post-condition. While this post-condition can examine any memory or variable value in the test, it most commonly defines the relaxed behavior possible by this test. The library of litmus tests is stored in the `litmus-config` directory.
 
 A litmus test is run along with a corresponding set of test parameters which may make it more likely for a relaxed behavior to show up. These parameters are also stored in json in the `test-parameters` file.
 
-To run a litmus test, a python script takes as input the configuration, generates several artifacts, and optionally runs the test. The artifacts are:
+To run a litmus test, a python script takes as input the configuration, generates several artifacts, and optionally runs the test. The artifacts are placed in the `target/` directory and are as follows:
 
 `<test-name>.cpp`: This is the C++ file that when compiled, will run the test.
 
