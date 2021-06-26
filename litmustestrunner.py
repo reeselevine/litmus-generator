@@ -6,11 +6,17 @@ import csv
 import os.path
 import litmusgenerator
 import litmusenv
+import litmustesttuner
 
 DEFAULT_TEST_PARAMETERS_FILE="litmus-config/test-parameters.json"
 DEFAULT_CONFIG_DIR="litmus-config/"
 
 env = litmusenv.LitmusEnv()
+
+def generate_and_run(test_config, parameter_config, check_output):
+    generate(test_config, parameter_config)
+    output = run(test_config['testName'], check_output)
+    return output
 
 def generate(test_config, parameter_config):
     print("Generating {} litmus test".format(test_config['testName']))
@@ -28,12 +34,28 @@ def run(test_name, check_output):
         return None
 
 def tune(test_config, parameter_config):
-     print("Tuning {} litmus test".format(test_config['testName']))
+    print("Tuning {} litmus test".format(test_config['testName']))
+    best_config = parameter_config.copy()
+    most_weak_behaviors = get_results(generate_and_run(test_config, parameter_config, check_output = True))[0]
+    for i in range(0, 2):
+        litmustesttuner.randomize_config(parameter_config)
+        print(parameter_config['barrierPct'])
+        weak_behaviors = get_results(generate_and_run(test_config, parameter_config, check_output = True))[0]
+        if weak_behaviors > most_weak_behaviors:
+            most_weak_behaviors = weak_behaviors
+            best_config = parameter_config.copy()
+    best_config['testName'] = test_config['testName']
+    best_config['weakBehaviors'] = most_weak_behaviors
+    print(json.dumps(best_config, indent=4))
 
-def store_output(test_name, parameter_config, output, output_file_name):
+def get_results(output):
     groups = re.search("weak behavior: (.*)\nnon weak behavior: (.*)\n", output)
     weak_behaviors = int(groups.group(1))
     non_weak_behaviors = int(groups.group(2))
+    return (weak_behaviors, non_weak_behaviors)
+
+def store_output(test_name, parameter_config, output, output_file_name):
+    (weak_behaviors, non_weak_behaviors) = get_results(output)
     output_fields = parameter_config.copy()
     output_fields['testName'] = test_name
     output_fields['weakBehaviors'] = weak_behaviors
@@ -90,8 +112,7 @@ def main():
         if args.tune:
             tune(test_config, parameter_config)
         else:
-            generate(test_config, parameter_config)
-            output = run(test_config['testName'], check_output)
+            output = generate_and_run(test_config, parameter_config, check_output)
             if output != None:
                 store_output(test_config['testName'], parameter_config, output, args.outputfile)
     elif args.generate_and_run_variants:
@@ -105,7 +126,7 @@ def main():
             generate(test_config, parameter_config)
             output = run(args.test_name, check_output)
             if output != None:
-                store_output(variant, parameter_config, output, args.outputfile)
+                store_output(variant, parameter_config, output, "results/" + args.outputfile)
             offset += 1
             variant = args.test_name + "-variant-{}".format(offset)
 
