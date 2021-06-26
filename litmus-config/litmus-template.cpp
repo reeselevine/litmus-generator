@@ -42,12 +42,12 @@ public:
 	    printf("Weak behavior to watch for: %s\n", weakBehaviorStr);
 	    printf("Sampling output approximately every %i iterations\n", sampleInterval);
 	    // setup devices, memory, and parameters
-	    auto testData = easyvk::Buffer(device, testMemorySize/sizeof(uint32_t));
+	    auto testData = easyvk::Buffer(device, testMemorySize);
 	    auto memLocations = easyvk::Buffer(device, numMemLocations);
 	    auto results = easyvk::Buffer(device, numOutputs);
 	    auto shuffleIds = easyvk::Buffer(device, maxWorkgroups*maxWorkgroupSize);
 	    auto barrier = easyvk::Buffer(device, 1);
-	    auto scratchpad = easyvk::Buffer(device, scratchMemorySize/sizeof(uint32_t));
+	    auto scratchpad = easyvk::Buffer(device, scratchMemorySize);
 	    auto scratchLocations = easyvk::Buffer(device, maxWorkgroups);
 	    auto stressParams = easyvk::Buffer(device, 3);
 	    std::vector<easyvk::Buffer> testBuffers = {testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams};
@@ -60,12 +60,12 @@ public:
 		    auto program = easyvk::Program(device, testFile.c_str(), testBuffers);
 		    int numWorkgroups = setNumWorkgroups();
 		    int workgroupSize = setWorkgroupSize();
-		    clearMemory(testData, testMemorySize/sizeof(uint32_t));
+		    clearMemory(testData, testMemorySize);
 		    setMemLocations(memLocations);
 		    clearMemory(results, numOutputs);
 		    setShuffleIds(shuffleIds, numWorkgroups, workgroupSize);
 		    clearMemory(barrier, 1);
-		    clearMemory(scratchpad, scratchMemorySize/sizeof(uint32_t));
+		    clearMemory(scratchpad, scratchMemorySize);
 		    setScratchLocations(scratchLocations, numWorkgroups);
 		    setStressParams(stressParams);
 		    program.setWorkgroups(numWorkgroups);
@@ -158,8 +158,8 @@ public:
             int region = rand() % numRegions;
             while(usedRegions.count(region))
             region = rand() % numRegions;
-            int locInRegion = rand() % (memStride/sizeof(uint32_t));
-            locations.store(i, (region * memStride)/sizeof(uint32_t) + locInRegion);
+            int locInRegion = rand() % (memStride);
+            locations.store(i, (region * memStride) + locInRegion);
             usedRegions.insert(region);
         }
     }
@@ -174,21 +174,21 @@ public:
             int region = rand() % numRegions;
             while(usedRegions.count(region))
             region = rand() % numRegions;
-            int locInRegion = rand() % (stressLineSize/sizeof(uint32_t));
+            int locInRegion = rand() % (stressLineSize);
             switch (stressAssignmentStrategy) {
                 case ROUND_ROBIN:
                     for (int j = i; j < numWorkgroups; j += stressTargetLines) {
-                        locations.store(j, (region * stressLineSize)/sizeof(uint32_t) + locInRegion);
+                        locations.store(j, (region * stressLineSize) + locInRegion);
                     }
                     break;
                 case CHUNKING:
                     int workgroupsPerLocation = numWorkgroups/stressTargetLines;
                     for (int j = 0; j < workgroupsPerLocation; j++) {
-                        locations.store(i*workgroupsPerLocation + j, (region * stressLineSize)/sizeof(uint32_t) + locInRegion);
+                        locations.store(i*workgroupsPerLocation + j, (region * stressLineSize) + locInRegion);
                     }
                     if (i == stressTargetLines - 1 && numWorkgroups % stressTargetLines != 0) {
                         for (int j = 0; j < numWorkgroups % stressTargetLines; j++) {
-                            locations.store(numWorkgroups - j - 1, (region * stressLineSize)/sizeof(uint32_t) + locInRegion);
+                            locations.store(numWorkgroups - j - 1, (region * stressLineSize) + locInRegion);
                         }
                     }
                     break;

@@ -37,9 +37,8 @@ def tune(test_config, parameter_config):
     print("Tuning {} litmus test".format(test_config['testName']))
     best_config = parameter_config.copy()
     most_weak_behaviors = get_results(generate_and_run(test_config, parameter_config, check_output = True))[0]
-    for i in range(0, 2):
+    for i in range(0, 10):
         litmustesttuner.randomize_config(parameter_config)
-        print(parameter_config['barrierPct'])
         weak_behaviors = get_results(generate_and_run(test_config, parameter_config, check_output = True))[0]
         if weak_behaviors > most_weak_behaviors:
             most_weak_behaviors = weak_behaviors
