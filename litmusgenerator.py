@@ -11,22 +11,6 @@ class LitmusTest:
 
     DEFAULT_LOCAL_ID = 0
     DEFAULT_MEM_ORDER = "relaxed"
-    defaults_dict = {
-        "minWorkgroups": 4,
-        "maxWorkgroups": 4,
-        "minWorkgroupSize": 1,
-        "maxWorkgroupSize": 1,
-        "shufflePct": 0,
-        "barrierPct": 0,
-        "memStride": 1,
-        "memStressPct": 0,
-        "stressLineSize": 2,
-        "stressTargetLines": 1,
-        "stressAssignmentStrategy": "ROUND_ROBIN",
-        "preStressPct": 0,
-        "testIterations": 10000,
-        "gpuDeviceId": -1
-    }
 
     class StressAccessPattern:
         
@@ -124,9 +108,6 @@ class LitmusTest:
         self.threads = []
         self.post_conditions = []
         self.test_name = test_config['testName']
-        self.template_replacements = {}
-        self.template_replacements['testName'] = self.test_name
-        self.initialize_template_replacements()
         self.initialize_threads()
         self.initialize_post_conditions()
         self.initialize_stress_settings()
@@ -134,23 +115,8 @@ class LitmusTest:
     # Code below this line initializes settings
 
     def initialize_stress_settings(self):
-        min_size = self.template_replacements['stressLineSize'] * self.template_replacements['stressTargetLines']
-        if 'scratchMemorySize' in self.parameter_config:
-            if self.parameter_config['scratchMemorySize'] < min_size:
-                raise Exception("scratch memory too small")
-            else:
-                self.template_replacements['scratchMemorySize'] = self.parameter_config['scratchMemorySize']
-        else:
-            self.template_replacements['scratchMemorySize'] = min_size
         self.pre_stress_pattern = self.StressAccessPattern(self.parameter_config["preStressPattern"])
         self.stress_pattern = self.StressAccessPattern(self.parameter_config["stressPattern"])
-
-    def initialize_template_replacements(self):
-        for key in self.defaults_dict:
-            if key in self.parameter_config:
-                self.template_replacements[key] = self.parameter_config[key]
-            else:
-                self.template_replacements[key] = self.defaults_dict[key]
 
     def initialize_threads(self):
         mem_loc = 0
@@ -179,45 +145,15 @@ class LitmusTest:
             else:
                 local_id = self.DEFAULT_LOCAL_ID
             self.threads.append(self.Thread(thread['workgroup'], local_id, instructions))
-        min_test_memory_size = self.template_replacements['memStride'] * len(self.memory_locations)
-        if 'testMemorySize' in self.parameter_config:
-            if self.parameter_config['testMemorySize'] < min_test_memory_size:
-                raise Exception("test memory too small")
-            else:
-                self.template_replacements['testMemorySize'] = self.parameter_config['testMemorySize']
-        else:
-            self.template_replacements['testMemorySize'] = min_test_memory_size
-        self.template_replacements['numMemLocations'] = len(self.memory_locations)
 
     def initialize_post_conditions(self):
-        num_outputs = 0
         for post_condition in self.test_config['postConditions']:
-            if post_condition['type'] == "variable":
-                num_outputs += 1
             self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
-        self.template_replacements['numOutputs'] = max(num_outputs, 1)
-        conditions = []
-        sample_ids = []
-        sample_values = []
-        weak_values = []
-        for post_condition in self.post_conditions:
-            sample_ids.append("{}: %u".format(post_condition.identifier))
-            weak_values.append("{}: {}".format(post_condition.identifier, post_condition.value))
-            if post_condition.output_type == "variable":
-                sample_values.append("results.load({})".format(self.variables[post_condition.identifier]))
-                conditions.append("results.load({}) == {}".format(self.variables[post_condition.identifier], post_condition.value))
-            elif post_condition.output_type == "memory":
-                sample_values.append("testData.load(memLocations.load({}))".format(self.memory_locations[post_condition.identifier]))
-                conditions.append("testData.load(memLocations.load({})) == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
-        self.template_replacements['weakBehaviorStr'] = ", ".join(weak_values)
-        self.template_replacements['postConditionSample'] = """printf("{}\\n", {});""".format(", ".join(sample_ids), ",".join(sample_values))
-        self.template_replacements['postCondition'] = " && ".join(conditions)
 
     # Code below this line generates the actual opencl kernel and vulkan code
 
     def generate(self):
         self.generate_openCL_kernel()
-        self.generate_vulkan_setup()
 
     def generate_openCL_kernel(self):
         body_statements = []
@@ -281,32 +217,3 @@ class LitmusTest:
         else:
             start = "} else if"
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
-
-    def spirv_code(self):
-        print("Generating SPIRV code")
-        subprocess.run([env.get("clspv"), "--cl-std=CL2.0", "--inline-entry-points", "target/" + self.test_name + ".cl", "-o",  "target/" + self.test_name + ".spv"])
-
-    def generate_vulkan_setup(self):
-        print("Building vulkan setup code")
-        with open("litmus-config/litmus-template.cpp", 'r') as template:
-            self.spirv_code()
-            template_content = template.read()
-        for key in self.template_replacements:
-            template_content = template_content.replace("{{ " + key + " }}", str(self.template_replacements[key]))
-        with open("target/" + self.test_name + ".cpp", "w") as output_file:
-            output_file.write(template_content)
-
-def main(argv):
-    test_config_file_name = argv[1]
-    parameter_config_file_name = argv[2]
-    test_config_file = open(test_config_file_name, "r")
-    parameter_config_file = open(parameter_config_file_name, "r")
-    test_config = json.loads(test_config_file.read())
-    parameter_config = json.loads(parameter_config_file.read())
-    litmus_test = LitmusTest(test_config, parameter_config)
-    litmus_test.generate()
-    test_config_file.close()
-    parameter_config_file.close()
-
-if __name__ == '__main__':
-    main(sys.argv)
