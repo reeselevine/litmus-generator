@@ -25,7 +25,7 @@ class VulkanLitmusSetup:
         self.litmus_test = litmus_test
         self.parameter_config = parameter_config
         self.template_replacements = {}
-        self.template_replacements['testName'] = self.test_name
+        self.template_replacements['testName'] = self.litmus_test.test_name
         self.initialize_template_replacements()
 
     def initialize_stress_settings(self):
@@ -59,12 +59,12 @@ class VulkanLitmusSetup:
         sample_ids = []
         sample_values = []
         weak_values = []
-        for post_condition in self.post_conditions:
+        for post_condition in self.litmus_test.post_conditions:
             sample_ids.append("{}: %u".format(post_condition.identifier))
             weak_values.append("{}: {}".format(post_condition.identifier, post_condition.value))
             if post_condition.output_type == "variable":
-                sample_values.append("results.load({})".format(self.variables[post_condition.identifier]))
-                conditions.append("results.load({}) == {}".format(self.variables[post_condition.identifier], post_condition.value))
+                sample_values.append("results.load({})".format(self.litmus_test.variables[post_condition.identifier]))
+                conditions.append("results.load({}) == {}".format(self.litmus_test.variables[post_condition.identifier], post_condition.value))
             elif post_condition.output_type == "memory":
                 sample_values.append("testData.load(memLocations.load({}))".format(self.memory_locations[post_condition.identifier]))
                 conditions.append("testData.load(memLocations.load({})) == {}".format(self.memory_locations[post_condition.identifier], post_condition.value))
@@ -84,14 +84,14 @@ class VulkanLitmusSetup:
 
     def spirv_code(self):
         print("Generating SPIRV code")
-        subprocess.run([self.env.get("clspv"), "--cl-std=CL2.0", "--inline-entry-points", "target/" + self.test_name + ".cl", "-o",  "target/" + self.test_name + ".spv"])
+        subprocess.run([self.env.get("clspv"), "--cl-std=CL2.0", "--inline-entry-points", "target/" + self.litmus_test.test_name + ".cl", "-o",  "target/" + self.litmus_test.test_name + ".spv"])
 
-    def generate_vulkan_setup(self):
+    def generate(self):
         print("Building vulkan setup code")
         with open("litmus-config/litmus-template.cpp", 'r') as template:
             self.spirv_code()
             template_content = template.read()
         for key in self.template_replacements:
             template_content = template_content.replace("{{ " + key + " }}", str(self.template_replacements[key]))
-        with open("target/" + self.test_name + ".cpp", "w") as output_file:
+        with open("target/" + self.litmus_test.test_name + ".cpp", "w") as output_file:
             output_file.write(template_content)
