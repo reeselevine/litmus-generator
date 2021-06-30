@@ -4,9 +4,10 @@ import subprocess
 import re
 import csv
 import os.path
-import litmusgenerator
 import litmusenv
 import litmustesttuner
+import vulkanlitmusgenerator
+import vulkanlitmussetup
 
 DEFAULT_TEST_PARAMETERS_FILE="litmus-config/test-parameters.json"
 DEFAULT_CONFIG_DIR="litmus-config/"
@@ -20,8 +21,10 @@ def generate_and_run(test_config, parameter_config, check_output):
 
 def generate(test_config, parameter_config):
     print("Generating {} litmus test".format(test_config['testName']))
-    litmus_test = litmusgenerator.LitmusTest(test_config, parameter_config)
+    litmus_test = vulkanlitmusgenerator.VulkanLitmusTest(test_config)
+    vulkan_setup = vulkanlitmussetup.VulkanLitmusSetup(litmus_test, parameter_config)
     litmus_test.generate()
+    vulkan_setup.generate()
 
 def run(test_name, check_output):
     subprocess.run([env.get("cppCompiler"), "-I{}".format(env.get("vulkanHeaders")), "-I{}".format(env.get("easyvkHeader")), "-std=gnu++14", "-o", "target/{}".format(test_name), "target/{}.cpp".format(test_name), "-leasyvk", "-lvulkan"])

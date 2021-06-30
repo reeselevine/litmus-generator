@@ -17,7 +17,11 @@ const int numOutputs = {{ numOutputs }};
 const int scratchMemorySize = {{ scratchMemorySize }};
 const int memStride = {{ memStride }};
 const int memStressPct = {{ memStressPct }};
+const int memStressIterations = {{ memStressIterations }};
+const int memStressPattern = {{ memStressPattern }};
 const int preStressPct = {{ preStressPct }};
+const int preStressIterations = {{ preStressIterations }};
+const int preStressPattern = {{ preStressPattern }};
 const int stressLineSize = {{ stressLineSize }};
 const int stressTargetLines = {{ stressTargetLines }};
 const int gpuDeviceId = {{ gpuDeviceId }};
@@ -49,7 +53,7 @@ public:
 	    auto barrier = easyvk::Buffer(device, 1);
 	    auto scratchpad = easyvk::Buffer(device, scratchMemorySize);
 	    auto scratchLocations = easyvk::Buffer(device, maxWorkgroups);
-	    auto stressParams = easyvk::Buffer(device, 3);
+	    auto stressParams = easyvk::Buffer(device, 7);
 	    std::vector<easyvk::Buffer> testBuffers = {testData, memLocations, results, shuffleIds, barrier, scratchpad, scratchLocations, stressParams};
 	    std::string testFile(testName);
 	    testFile = "target/" + testFile + ".spv";
@@ -214,22 +218,35 @@ public:
 	    }
     }
 
+    /**
+     * 0: barrier
+     * 1: memory stress
+     * 2: memory stress iterations
+     * 3: memory stress pattern
+     * 4: pre-stress
+     * 5: pre-stress iterations
+     * 6: pre-stress pattern
+     */
     void setStressParams(easyvk::Buffer &params) {
-        if (percentageCheck(memStressPct)) {
-            params.store(0, 1);
+        if (percentageCheck(barrierPct)) {
+	    params.store(0, 1);
         } else {
 	    params.store(0, 0);
-        }
-        if (percentageCheck(preStressPct)) {
-	    params.store(1, 1);
+	}
+        if (percentageCheck(memStressPct)) {
+            params.store(1, 1);
         } else {
 	    params.store(1, 0);
         }
-        if (percentageCheck(barrierPct)) {
-	    params.store(2, 1);
+	params.store(2, memStressIterations);
+	params.store(3, memStressPattern);
+        if (percentageCheck(preStressPct)) {
+	    params.store(4, 1);
         } else {
-	    params.store(2, 0);
+	    params.store(4, 0);
         }
+	params.store(5, preStressIterations);
+	params.store(6, preStressPattern);
     }
 
     bool percentageCheck(int percentage) {
