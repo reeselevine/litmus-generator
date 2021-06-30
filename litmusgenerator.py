@@ -86,9 +86,8 @@ class LitmusTest:
             self.local_id = local_id
             self.instructions = instructions
 
-    def __init__(self, test_config, parameter_config):
+    def __init__(self, test_config):
         self.test_config = test_config
-        self.parameter_config = parameter_config
         self.memory_locations = {}
         self.variables = {}
         self.threads = []

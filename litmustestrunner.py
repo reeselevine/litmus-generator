@@ -21,7 +21,7 @@ def generate_and_run(test_config, parameter_config, check_output):
 
 def generate(test_config, parameter_config):
     print("Generating {} litmus test".format(test_config['testName']))
-    litmus_test = litmusgenerator.LitmusTest(test_config, parameter_config)
+    litmus_test = litmusgenerator.LitmusTest(test_config)
     vulkan_setup = vulkanlitmussetup.VulkanLitmusSetup(litmus_test, parameter_config)
     litmus_test.generate()
     vulkan_setup.generate()
