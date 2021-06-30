@@ -12,12 +12,21 @@ class VulkanLitmusSetup:
         "barrierPct": 0,
         "memStride": 1,
         "memStressPct": 0,
+        "memStressIterations": 100,
         "stressLineSize": 2,
         "stressTargetLines": 1,
         "stressAssignmentStrategy": "ROUND_ROBIN",
         "preStressPct": 0,
+        "preStressIterations": 100,
         "testIterations": 10000,
         "gpuDeviceId": -1
+    }
+
+    stress_dict = {
+        "storestore": 0,
+        "storeload": 1,
+        "loadstore": 2,
+        "loadload": 3
     }
 
     def __init__(self, litmus_test, parameter_config):
@@ -29,6 +38,13 @@ class VulkanLitmusSetup:
         self.initialize_template_replacements()
 
     def initialize_stress_settings(self):
+
+        def init_stress_pattern(key):
+            if key in self.parameter_config:
+                self.template_replacements[key] = self.stress_dict["".join(self.parameter_config[key])]
+            else:
+                self.template_replacements[key] = 0
+
         min_size = self.template_replacements['stressLineSize'] * self.template_replacements['stressTargetLines']
         if 'scratchMemorySize' in self.parameter_config:
             if self.parameter_config['scratchMemorySize'] < min_size:
@@ -37,6 +53,8 @@ class VulkanLitmusSetup:
                 self.template_replacements['scratchMemorySize'] = self.parameter_config['scratchMemorySize']
         else:
             self.template_replacements['scratchMemorySize'] = min_size
+        init_stress_pattern("memStressPattern")
+        init_stress_pattern("preStressPattern")
 
     def initialize_memory_size(self):
         min_test_memory_size = self.template_replacements['memStride'] * len(self.litmus_test.memory_locations)

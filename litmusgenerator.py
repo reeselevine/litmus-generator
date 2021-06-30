@@ -32,40 +32,6 @@ class LitmusTest:
         }
     }
 
-    class StressAccessPattern:
-        
-        stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
-
-        # Returns the first access in the stress pattern
-        stress_first_access = {
-            "store": ["{} = i;".format(stress_mem_location)],
-            "load": ["uint tmp1 = {};".format(stress_mem_location), 
-                "if (tmp1 > 100) {", "{} = get_local_id(0);".format(stress_mem_location), 
-                "}"]
-        }
-
-        # Given a first access, returns the second access in the stress pattern
-        stress_second_access = {
-            "store": {
-                "store": ["{} = i + 1;".format(stress_mem_location)],
-                "load": ["uint tmp1 = {};".format(stress_mem_location),
-                    "if (tmp1 > 100) {", "break;",
-                    "}"]
-            },
-            "load": {
-                "store": ["{} = i;".format(stress_mem_location)],
-                "load": ["uint tmp2 = {};".format(stress_mem_location),
-                    "if (tmp2 > 100) {", "break;",
-                    "}"]
-            }
-        }
-
-        def __init__(self, pattern):
-            self.access_pattern = self.stress_first_access[pattern[0]] + self.stress_second_access[pattern[0]][pattern[1]]
-
-        def pattern(self):
-            return self.access_pattern
-
     class PostCondition:
 
         def __init__(self, output_type, identifier, value):
@@ -130,13 +96,8 @@ class LitmusTest:
         self.test_name = test_config['testName']
         self.initialize_threads()
         self.initialize_post_conditions()
-        self.initialize_stress_settings()
 
     # Code below this line initializes settings
-
-    def initialize_stress_settings(self):
-        self.pre_stress_pattern = self.StressAccessPattern(self.parameter_config["preStressPattern"])
-        self.stress_pattern = self.StressAccessPattern(self.parameter_config["stressPattern"])
 
     def initialize_threads(self):
         mem_loc = 0
