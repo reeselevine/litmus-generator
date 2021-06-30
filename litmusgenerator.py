@@ -3,14 +3,34 @@ import os
 import argparse
 import json
 import subprocess
-import litmusenv
-
-env = litmusenv.LitmusEnv()
 
 class LitmusTest:
 
     DEFAULT_LOCAL_ID = 0
     DEFAULT_MEM_ORDER = "relaxed"
+    openCL_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
+    # Returns the first access in the stress pattern
+    openCL_stress_first_access = {
+        "store": ["{} = i;".format(stress_mem_location)],
+        "load": ["uint tmp1 = {};".format(stress_mem_location), 
+            "if (tmp1 > 100) {", "{} = get_local_id(0);".format(stress_mem_location), 
+            "}"]
+    }
+    # Given a first access, returns the second access in the stress pattern
+    openCL_stress_second_access = {
+        "store": {
+            "store": ["{} = i + 1;".format(stress_mem_location)],
+            "load": ["uint tmp1 = {};".format(stress_mem_location),
+                "if (tmp1 > 100) {", "break;",
+                "}"]
+        },
+        "load": {
+            "store": ["{} = i;".format(stress_mem_location)],
+            "load": ["uint tmp2 = {};".format(stress_mem_location),
+                "if (tmp2 > 100) {", "break;",
+                "}"]
+        }
+    }
 
     class StressAccessPattern:
         
@@ -163,11 +183,7 @@ class LitmusTest:
            body_statements.append("  const uint {} = mem_locations[{}];".format(variable, mem_loc))
         for thread in self.threads:
             variables = set()
-            thread_statements = [
-                "if (stress_params[1]) {",
-                "  for (uint i = 0; i < {}; i++) {{".format(self.parameter_config["preStressIterations"])
-            ]
-            thread_statements = thread_statements + ["    {}".format(statement) for statement in self.pre_stress_pattern.pattern()]
+            thread_statements = self.generate_stress()
             thread_statements = thread_statements + ["  }", "}", "if (stress_params[2]) {", "  spin(barrier);", "}"]
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
@@ -188,6 +204,24 @@ class LitmusTest:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, "w") as output_file:
             output_file.write(kernel)
+
+    def generate_stress(self):
+        outer_statements = [
+            "if (stress_params[1]) {",
+            "  for (uint i = 0; i < stress_params[2]; i++) {",
+            "    uint pattern = stress_params[3]"
+        ]
+        i = 0
+        for first in self.openCL_stress_first_access:
+            for second in self.openCL_stress_second_access[first]:
+                if i == 0:
+                    outer_statements += "    if (pattern == 0) {"
+                else:
+                    outer_statements += "    if (pattern == {}) {{".format(i)
+                outer_statements += self.openCL_stress_first_access[first] + self.openCL_stress_second_access[first][second]
+                outer_statements += "   }"
+                i += 1
+        return outer_statements
 
     def generate_spin(self):
         header = "static void spin(__global atomic_uint* barrier) {"
