@@ -3,25 +3,25 @@ import litmusgenerator
 
 class VulkanLitmusTest(litmusgenerator.LitmusTest):
 
-    openCL_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
-    # Returns the first access in the stress pattern
+    opencl_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
+    # returns the first access in the stress pattern
     openCL_stress_first_access = {
-        "store": ["{} = i;".format(openCL_stress_mem_location)],
-        "load": ["uint tmp1 = {};".format(openCL_stress_mem_location), 
+        "store": ["{} = i;".format(opencl_stress_mem_location)],
+        "load": ["uint tmp1 = {};".format(opencl_stress_mem_location),
             "if (tmp1 > 100) {", "  break;",
             "}"]
     }
-    # Given a first access, returns the second access in the stress pattern
+    # given a first access, returns the second access in the stress pattern
     openCL_stress_second_access = {
         "store": {
-            "store": ["{} = i + 1;".format(openCL_stress_mem_location)],
-            "load": ["uint tmp1 = {};".format(openCL_stress_mem_location),
+            "store": ["{} = i + 1;".format(opencl_stress_mem_location)],
+            "load": ["uint tmp1 = {};".format(opencl_stress_mem_location),
                 "if (tmp1 > 100) {", "  break;",
                 "}"]
         },
         "load": {
-            "store": ["{} = i;".format(openCL_stress_mem_location)],
-            "load": ["uint tmp2 = {};".format(openCL_stress_mem_location),
+            "store": ["{} = i;".format(opencl_stress_mem_location)],
+            "load": ["uint tmp2 = {};".format(opencl_stress_mem_location),
                 "if (tmp2 > 100) {", "  break;",
                 "}"]
         }
@@ -36,9 +36,6 @@ class VulkanLitmusTest(litmusgenerator.LitmusTest):
         }
 
     # Code below this line generates the actual opencl kernel
-
-    def generate(self):
-        self.generate_openCL_kernel()
 
     def generate_openCL_kernel(self):
         body_statements = []
@@ -65,11 +62,28 @@ class VulkanLitmusTest(litmusgenerator.LitmusTest):
         kernel = "\n".join([kernel_func_def] + body_statements + ["}\n"])
         spin_func = self.generate_spin()
         stress_func = self.generate_stress()
-        kernel = "\n\n".join([spin_func, stress_func, kernel])
+        kerel = "\n\n".join([spin_func, stress_func, kernel])
         filename = "target/" + self.test_name + ".cl"
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, "w") as output_file:
             output_file.write(kernel)
+
+    def file_ext(self):
+        return ".cl"
+
+    def generate_mem_loc(self, variable, mem_loc):
+        return "  const uint {} = mem_locations[{}];".format(variable, mem_loc)
+
+    def generate_thread_header(self):
+        return [
+            "if (stress_params[4]) {",
+            "  do_stress(scratchpad, scratch_locations, stress_params[5], stress_params[6]);",
+            "}",
+            "if (stress_params[0]) {",
+            "  spin(barrier);",
+            "}"
+        ]
+
 
     def openCL_repr(self, instr):
         if isinstance(instr, self.ReadInstruction):
@@ -78,6 +92,21 @@ class VulkanLitmusTest(litmusgenerator.LitmusTest):
             return "atomic_store_explicit(&test_data[{}], {}, {});".format(instr.mem_loc, instr.value, self.openCL_mem_order[instr.mem_order])
         elif isinstance(instr, self.MemoryFence):
             return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, {}, memory_scope_device);".format(self.openCL_mem_order[instr.mem_order])
+
+    def read_repr(self, instr):
+        return "uint {} = atomic_load_explicit(&test_data[{}], {});".format(instr.variable, instr.mem_loc, self.openCL_mem_order[instr.mem_order])
+
+    def write_repr(self, instr):
+        return "atomic_store_explicit(&test_data[{}], {}, {});".format(instr.mem_loc, instr.value, self.openCL_mem_order[instr.mem_order])
+
+    def fence_repr(self, instr):
+        return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, {}, memory_scope_device);".format(self.openCL_mem_order[instr.mem_order])
+
+    def results_repr(self, variable):
+        return "atomic_store_explicit(&results[{}], {}, {});".format(self.variables[variable], variable, "memory_order_seq_cst")
+
+    def generate_meta(self):
+        return ""
 
     def generate_stress(self):
         body = ["static void do_stress(__global uint* scratchpad, __global uint* scratch_locations, uint iterations, uint pattern) {",
@@ -108,9 +137,20 @@ class VulkanLitmusTest(litmusgenerator.LitmusTest):
         ])
         return "\n".join([body, "}"])
 
-    def thread_filter(self, workgroup, thread, first_thread):
+    def thread_filter(self, first_thread, workgroup, thread):
         if first_thread:
             start = "if"
         else:
             start = "} else if"
         return start + " (shuffled_ids[get_global_id(0)] == get_local_size(0) * {} + {}) {{".format(workgroup, thread)
+
+    def generate_stress_call(self):
+        return [
+            "  } else if (stress_params[1]) {",
+            "    do_stress(scratchpad, scratch_locations, stress_params[2], stress_params[3]);",
+            "  }"
+        ]
+
+    def generate_shader_def(self):
+        kernel_args = ["__global atomic_uint* test_data", "__global uint* mem_locations", "__global atomic_uint* results", "__global uint* shuffled_ids","__global atomic_uint* barrier", "__global uint* scratchpad", "__global uint* scratch_locations", "__global uint* stress_params"]
+        return "__kernel void litmus_test(\n  " + ",\n  ".join(kernel_args) + ") {"

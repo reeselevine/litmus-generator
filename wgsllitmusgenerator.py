@@ -7,7 +7,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     # returns the first access in the stress pattern
     wgsl_stress_first_access = {
         "store": ["{} = i;".format(wgsl_stress_mem_location)],
-        "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location), 
+        "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location),
             "if (tmp1 > 100) {", "  break;",
             "}"]
     }
@@ -27,7 +27,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         }
     }
 
-    def generate(self):
+    def generate_wgsl_kernel(self):
         body_statements = []
         first_thread = True
         variable_init = []
@@ -59,6 +59,21 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         with open(filename, "w") as output_file:
             output_file.write(shader)
 
+    def file_ext(self):
+        return ".wgsl"
+
+    def generate_mem_loc(self, variable, mem_loc):
+        return "  var {} : u32 = mem_locations.value[{}];".format(variable, mem_loc)
+
+    def generate_thread_header(self):
+        return [
+            "if (stress_params.value[4]) {",
+            "  do_stress(stress_params.value[5], stress_params.value[6]);",
+            "}",
+            "if (stress_params.value[0]) {",
+            "  spin();",
+            "}"
+        ]
 
     def generate_types(self):
         atomic_type = ["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"]
@@ -77,7 +92,10 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "[[group(0), binding(6)]] var<storage, read_write> stress_params : Memory;"
         ]
         return "\n".join(bindings)
-    
+
+    def generate_meta(self):
+        return "\n\n".join([self.generate_types(), self.generate_bindings()])
+
     def generate_stress(self):
         body = ["[[stage(compute)]] fn do_stress(iterations: u32, pattern: u32) {", "for(var i: u32 = 0; i < iterations; i = i + 1) {"]
         i = 0
@@ -108,7 +126,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "}"
         ]
         return "\n".join(body)
-    
+
     def wgsl_repr(self, instr):
         if isinstance(instr, self.ReadInstruction):
             return "let {} = atomicLoad(&test_data.value[{}]);".format(instr.variable, instr.mem_loc)
@@ -117,10 +135,32 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         elif isinstance(instr, self.MemoryFence):
             pass
 
-    def thread_filter(self, first_thread):
+    def read_repr(self, instr):
+        return "let {} = atomicLoad(&test_data.value[{}]);".format(instr.variable, instr.mem_loc)
+
+    def write_repr(self, instr):
+        return "atomicStore(&test_data.value[{}], {});".format(instr.mem_loc, instr.value)
+
+    def fence_repr(self, instr):
+        pass
+
+    def results_repr(self, variable):
+        return "atomicStore(&results.value[{}], {});".format(self.variables[variable], variable)
+
+
+    def thread_filter(self, first_thread, workgroup, thread):
         if first_thread:
             start = "if"
         else:
             start = "} elseif"
         return start + " (shuffled_ids.value[global_invocation_id[0]] == local_invocation_index) {"
 
+    def generate_stress_call(self):
+        return [
+            "  } elseif (stress_params.value[1]) {",
+            "    do_stress(stress_params.value[2], stress_params.value[3]);",
+            "  }"
+        ]
+
+    def generate_shader_def(self):
+        return "[[stage(compute)]] fn main([[builtin(workgroup_id) workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {"
