@@ -27,38 +27,6 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         }
     }
 
-    def generate_wgsl_kernel(self):
-        body_statements = []
-        first_thread = True
-        variable_init = []
-        for variable, mem_loc in self.memory_locations.items():
-            body_statements.append("  var {} : u32 = mem_locations.value[{}];".format(variable, mem_loc))
-        for thread in self.threads:
-            variables = set()
-            thread_statements = ["if (stress_params.value[4]) {", "  do_stress(stress_params.value[5], stress_params.value[6]);", "}"]
-            thread_statements = thread_statements + ["if (stress_params.value[0]) {", "  spin();", "}"]
-            for instr in thread.instructions:
-                if isinstance(instr, self.ReadInstruction):
-                    variables.add(instr.variable)
-                thread_statements.append(self.wgsl_repr(instr))
-            for variable in variables:
-                thread_statements.append("atomicStore(&results.value[{}], {});".format(self.variables[variable], variable))
-            thread_statements = ["    {}".format(statement) for statement in thread_statements]
-            body_statements = body_statements + ["  {}".format(self.thread_filter(first_thread))] + thread_statements
-            first_thread = False
-        body_statements = body_statements + ["  \n".join(["  } elseif (stress_params.value[1]) {", "    do_stress(stress_params.value[2], stress_params.value[3]);", "  }"])]
-        shader_def = "[[stage(compute)]] fn main([[builtin(workgroup_id) workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {"
-        shader = "\n".join([shader_def] + body_statements + ["}\n"])
-        shader_types = self.generate_types()
-        bindings = self.generate_bindings()
-        spin_func = self.generate_spin()
-        stress_func = self.generate_stress()
-        shader = "\n\n".join([shader_types, bindings, spin_func, stress_func, shader])
-        filename = "target/" + self.test_name + ".wgsl"
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, "w") as output_file:
-            output_file.write(shader)
-
     def file_ext(self):
         return ".wgsl"
 
@@ -127,14 +95,6 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         ]
         return "\n".join(body)
 
-    def wgsl_repr(self, instr):
-        if isinstance(instr, self.ReadInstruction):
-            return "let {} = atomicLoad(&test_data.value[{}]);".format(instr.variable, instr.mem_loc)
-        elif isinstance(instr, self.WriteInstruction):
-            return "atomicStore(&test_data.value[{}], {});".format(instr.mem_loc, instr.value)
-        elif isinstance(instr, self.MemoryFence):
-            pass
-
     def read_repr(self, instr):
         return "let {} = atomicLoad(&test_data.value[{}]);".format(instr.variable, instr.mem_loc)
 
@@ -146,7 +106,6 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def results_repr(self, variable):
         return "atomicStore(&results.value[{}], {});".format(self.variables[variable], variable)
-
 
     def thread_filter(self, first_thread, workgroup, thread):
         if first_thread:
