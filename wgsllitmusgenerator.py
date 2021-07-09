@@ -65,18 +65,22 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "\n\n".join([self.generate_types(), self.generate_bindings()])
 
     def generate_stress(self):
-        body = ["fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {", "for(var i: u32 = 0u; i < iterations; i = i + 1u) {"]
+        body = [
+            "fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {",
+            "switch(pattern) {"
+        ]
         i = 0
         for first in self.wgsl_stress_first_access:
             for second in self.wgsl_stress_second_access[first]:
-                if i == 0:
-                    body += ["  if (pattern == 0u) {"]
-                else:
-                    body += ["  }} elseif (pattern == {}u) {{".format(i)]
-                body += ["    {}".format(statement) for statement in self.wgsl_stress_first_access[first]]
-                body += ["    {}".format(statement) for statement in self.wgsl_stress_second_access[first][second]]
+                body += [
+                    "  case {}u: {{".format(i),
+                    "    for(var i: u32 = 0u; i < iterations; i = i + 1u) {"]
+                body += ["      {}".format(statement) for statement in self.wgsl_stress_first_access[first]]
+                body += ["      {}".format(statement) for statement in self.wgsl_stress_second_access[first][second]]
+                body += ["    }", "  }"]
                 i += 1
-        body += ["  }", "}"]
+        body += ["  default: {", "    break;", "  }"]
+        body += ["}"]
         return "\n".join(["\n  ".join(body), "}"])
 
     def generate_spin(self):
@@ -112,7 +116,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             start = "if"
         else:
             start = "} elseif"
-        return start + " (shuffled_ids.value[global_invocation_id[0]] == workgroupXSize * {} + {}) {{".format(workgroup, thread)
+        return start + " (shuffled_ids.value[global_invocation_id[0]] == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, thread)
 
     def generate_stress_call(self):
         return [
