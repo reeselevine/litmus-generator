@@ -112,7 +112,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             start = "if"
         else:
             start = "} elseif"
-        return start + " (shuffled_ids.value[global_invocation_id[0]] == local_invocation_index) {"
+        return start + " (shuffled_ids.value[global_invocation_id[0]] == workgroupXSize * {} + {}) {{".format(workgroup, thread)
 
     def generate_stress_call(self):
         return [
@@ -123,6 +123,6 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def generate_shader_def(self):
         return "\n".join([
-            "let workgroupXSize = 1;"
+            "let workgroupXSize = 1;",
             "[[stage(compute), workgroup_size(workgroupXSize)]] fn main([[builtin(workgroup_id)]] workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {"
         ])
