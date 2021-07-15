@@ -8,6 +8,7 @@ import litmusenv
 import litmustesttuner
 import vulkanlitmusgenerator
 import vulkanlitmussetup
+import wgsllitmusgenerator
 
 DEFAULT_TEST_PARAMETERS_FILE="litmus-config/test-parameters.json"
 DEFAULT_CONFIG_DIR="litmus-config/"
@@ -15,16 +16,20 @@ DEFAULT_CONFIG_DIR="litmus-config/"
 env = litmusenv.LitmusEnv()
 
 def generate_and_run(test_config, parameter_config, check_output):
-    generate(test_config, parameter_config)
+    generate(test_config, parameter_config, "vulkan")
     output = run(test_config['testName'], check_output)
     return output
 
-def generate(test_config, parameter_config):
-    print("Generating {} litmus test".format(test_config['testName']))
-    litmus_test = vulkanlitmusgenerator.VulkanLitmusTest(test_config)
-    vulkan_setup = vulkanlitmussetup.VulkanLitmusSetup(litmus_test, parameter_config)
-    litmus_test.generate()
-    vulkan_setup.generate()
+def generate(test_config, parameter_config, backend):
+    print("Generating {} litmus test for backend {}".format(test_config['testName'], backend))
+    if backend == "vulkan":
+        litmus_test = vulkanlitmusgenerator.VulkanLitmusTest(test_config)
+        vulkan_setup = vulkanlitmussetup.VulkanLitmusSetup(litmus_test, parameter_config)
+        litmus_test.generate()
+        vulkan_setup.generate()
+    elif backend == "wgsl":
+        litmus_test = wgsllitmusgenerator.WgslLitmusTest(test_config)
+        litmus_test.generate()
 
 def run(test_name, check_output):
     subprocess.run([env.get("cppCompiler"), "-I{}".format(env.get("vulkanHeaders")), "-I{}".format(env.get("easyvkHeader")), "-std=gnu++14", "-o", "target/{}".format(test_name), "target/{}.cpp".format(test_name), "-leasyvk", "-lvulkan"])
@@ -98,6 +103,7 @@ def parse_args():
     parser.add_argument("--offset", help="When running a variant, which variant offset to start at")
     parser.add_argument("--outputfile", help="Output file to store results when running tests")
     parser.add_argument("--tune", action="store_true", help="Tune parameter config, should only be used when generating and running a test")
+    parser.add_argument("--backend", help="Backend to use. Only valid when generating (not running) a litmus test. Valid options are vulkan and wgsl")
     return parser.parse_args()
 
 def main():
@@ -108,7 +114,11 @@ def main():
         check_output = True
     if args.generate:
         test_config, parameter_config = load_config(args, args.test_name)
-        generate(test_config, parameter_config)
+        if args.backend:
+            backend = args.backend
+        else:
+            backend = "vulkan"
+        generate(test_config, parameter_config, backend)
     elif args.generate_and_run:
         test_config, parameter_config = load_config(args, args.test_name)
         if args.tune:

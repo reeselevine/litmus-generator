@@ -1,3 +1,5 @@
+import os
+
 class LitmusTest:
 
     DEFAULT_LOCAL_ID = 0
@@ -83,4 +85,78 @@ class LitmusTest:
             self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
 
     def generate(self):
+        body_statements = []
+        first_thread = True
+        variable_init = []
+        for variable, mem_loc in self.memory_locations.items():
+            body_statements.append(self.generate_mem_loc(variable, mem_loc))
+        for thread in self.threads:
+            variables = set()
+            thread_statements = self.generate_thread_header()
+            for instr in thread.instructions:
+                if isinstance(instr, self.ReadInstruction):
+                    variables.add(instr.variable)
+                thread_statements.append(self.backend_repr(instr))
+            for variable in variables:
+                thread_statements.append(self.results_repr(variable))
+            thread_statements = ["    {}".format(statement) for statement in thread_statements]
+            body_statements = body_statements + ["  {}".format(self.thread_filter(first_thread, thread.workgroup, thread.local_id))] + thread_statements
+            first_thread = False
+        body_statements = body_statements + ["  \n".join(self.generate_stress_call())]
+        shader = "\n".join([self.generate_shader_def()] + body_statements + ["}\n"])
+        meta_info = self.generate_meta()
+        spin_func = self.generate_spin()
+        stress_func = self.generate_stress()
+        shader = "\n\n".join([meta_info, spin_func, stress_func, shader])
+        filename = "target/" + self.test_name + self.file_ext()
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, "w") as output_file:
+            output_file.write(shader)
+    
+    def file_ext(self):
         pass
+
+    def generate_mem_loc(self, variable, mem_loc):
+        pass
+
+    def generate_thread_header(self):
+        pass
+
+    def backend_repr(self, instr):
+        if isinstance(instr, self.ReadInstruction):
+            return self.read_repr(instr)
+        elif isinstance(instr, self.WriteInstruction):
+            return self.write_repr(instr)
+        elif isinstance(instr, self.MemoryFence):
+            return self.fence_repr(instr)
+
+    def read_repr(self, instr):
+        pass
+
+    def write_repr(self, instr):
+        pass
+
+    def fence_repr(self, instr):
+        pass
+
+    def results_repr(self, variable):
+       pass 
+
+    def thread_filter(self, first_thread, workgroup, thread):
+        pass
+
+    def generate_stress_call(self):
+        pass
+
+    def generate_shader_def(self):
+        pass
+
+    def generate_meta(self):
+        pass
+
+    def generate_stress(self):
+        pass
+
+    def generate_spin(self):
+        pass
+
