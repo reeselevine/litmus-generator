@@ -3,12 +3,14 @@ import litmusgenerator
 
 class WgslLitmusTest(litmusgenerator.LitmusTest):
 
-    wgsl_stress_mem_location = "scratchpad.value[scratch_locations.value[workgroup_id]]"
+    wgsl_stress_mem_location = "scratchpad.value[addr]"
     # returns the first access in the stress pattern
     wgsl_stress_first_access = {
         "store": ["{} = i;".format(wgsl_stress_mem_location)],
         "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location),
-            "if (tmp1 > 100u) {", "  break;",
+            "if (tmp1 > 100000u) {",
+            "  {} = i;".format(wgsl_stress_mem_location),
+            "  break;",
             "}"]
     }
     # given a first access, returns the second access in the stress pattern
@@ -16,13 +18,17 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         "store": {
             "store": ["{} = i + 1u;".format(wgsl_stress_mem_location)],
             "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location),
-                "if (tmp1 > 100u) {", "  break;",
+                "if (tmp1 > 100000u) {",
+                "  {} = i;".format(wgsl_stress_mem_location),
+                "  break;",
                 "}"]
         },
         "load": {
             "store": ["{} = i;".format(wgsl_stress_mem_location)],
             "load": ["let tmp2: u32 = {};".format(wgsl_stress_mem_location),
-                "if (tmp2 > 100u) {", "  break;",
+                "if (tmp2 > 100000u) {",
+                "  {} = i;".format(wgsl_stress_mem_location),
+                "  break;",
                 "}"]
         }
     }
@@ -31,14 +37,14 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return ".wgsl"
 
     def generate_mem_loc(self, variable, mem_loc):
-        return "  var {} : u32 = mem_locations.value[{}];".format(variable, mem_loc)
+        return "  let a{} = &test_data.value[mem_locations.value[{}]];".format(variable, mem_loc)
 
     def generate_thread_header(self):
         return [
-            "if (stress_params.value[4] == 1u) {",
+            "if (mem_stress == 1u) {",
             "  do_stress(stress_params.value[5], stress_params.value[6], workgroup_id[0]);",
             "}",
-            "if (stress_params.value[0] == 1u) {",
+            "if (do_barrier == 1u) {",
             "  spin();",
             "}"
         ]
@@ -67,6 +73,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def generate_stress(self):
         body = [
             "fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {",
+            "let addr = scratch_locations.value[workgroup_id];",
             "switch(pattern) {"
         ]
         i = 0
@@ -92,7 +99,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "    if (i == 1024u || bar_val >= {}u) {{".format(len(self.threads)),
             "      break;",
             "    }",
-            "    bar_val = atomicLoad(&barrier.value[0]);",
+            "    bar_val = atomicAdd(&barrier.value[0], 0u);",
             "    i = i + 1u;",
             "  }",
             "}"
@@ -100,10 +107,10 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "\n".join(body)
 
     def read_repr(self, instr):
-        return "let {} = atomicLoad(&test_data.value[{}]);".format(instr.variable, instr.mem_loc)
+        return "let {} = atomicLoad(a{});".format(instr.variable, instr.mem_loc)
 
     def write_repr(self, instr):
-        return "atomicStore(&test_data.value[{}], {}u);".format(instr.mem_loc, instr.value)
+        return "atomicStore(a{}, {}u);".format(instr.mem_loc, instr.value)
 
     def fence_repr(self, instr):
         pass
@@ -128,5 +135,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def generate_shader_def(self):
         return "\n".join([
             "let workgroupXSize = 1;",
-            "[[stage(compute), workgroup_size(workgroupXSize)]] fn main([[builtin(workgroup_id)]] workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {"
+            "[[stage(compute), workgroup_size(workgroupXSize)]] fn main([[builtin(workgroup_id)]] workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {",
+            "  let mem_stress = stress_params.value[4];",
+            "  let do_barrier = stress_params.value[0];"
         ])
