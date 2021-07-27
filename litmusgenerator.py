@@ -17,17 +17,19 @@ class LitmusTest:
 
     class ReadInstruction(Instruction):
 
-        def __init__(self, mem_loc, variable, mem_order):
+        def __init__(self, mem_loc, variable, mem_order, use_rmw):
             self.mem_loc = mem_loc
             self.variable = variable
             self.mem_order = mem_order
+            self.use_rmw = use_rmw
 
     class WriteInstruction(Instruction):
 
-        def __init__(self, mem_loc, value, mem_order):
+        def __init__(self, mem_loc, value, mem_order, use_rmw):
             self.mem_loc = mem_loc
             self.value = value
             self.mem_order = mem_order
+            self.use_rmw = use_rmw
 
     class MemoryFence(Instruction):
 
@@ -55,6 +57,7 @@ class LitmusTest:
     def initialize_threads(self):
         mem_loc = 0
         variable_output = 0
+        use_rmw = False
         for thread in self.test_config['threads']:
             instructions = []
             for instruction in thread['actions']:
@@ -65,13 +68,15 @@ class LitmusTest:
                     mem_order = instruction['memoryOrder']
                 else:
                     mem_order = self.DEFAULT_MEM_ORDER
+                if 'useRMW' in instruction:
+                    use_rmw = instruction['useRMW']
                 if instruction['action'] == "read":
                     if instruction['variable'] not in self.variables:
                         self.variables[instruction['variable']] = variable_output
                         variable_output += 1
-                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable'], mem_order))
+                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable'], mem_order, use_rmw))
                 if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order))
+                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw))
                 if instruction['action'] == "fence":
                     instructions.append(self.MemoryFence(mem_order))
             if 'localId' in thread:

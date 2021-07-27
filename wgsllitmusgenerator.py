@@ -107,10 +107,20 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "\n".join(body)
 
     def read_repr(self, instr):
-        return "let {} = atomicLoad(a{});".format(instr.variable, instr.mem_loc)
+        template = ""
+        if instr.use_rmw:
+            template = "let {} = atomicAdd(a{}, 0u);"
+        else:
+            template = "let {} = atomicLoad(a{});"
+        return template.format(instr.variable, instr.mem_loc)
 
     def write_repr(self, instr):
-        return "atomicStore(a{}, {}u);".format(instr.mem_loc, instr.value)
+        template = ""
+        if instr.use_rmw:
+            template = "atomicExchange(a{}, {}u);"
+        else:
+            template = "atomicStore(a{}, {}u);"
+        return template.format(instr.mem_loc, instr.value)
 
     def fence_repr(self, instr):
         pass
