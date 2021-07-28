@@ -1,5 +1,5 @@
 {
-    "testName": "iriw",
+    "testName": "corr4",
     "threads": [
         {
             "workgroup": 0,
@@ -21,7 +21,7 @@
                 },
                 {
                     "action": "read",
-                    "memoryLocation": "y",
+                    "memoryLocation": "x",
                     "variable": "r1"
                 }
             ]
@@ -31,8 +31,8 @@
             "actions": [
                 {
                     "action": "write",
-                    "memoryLocation": "y",
-                    "value": 1
+                    "memoryLocation": "x",
+                    "value": 2
                 }
             ]
         },
@@ -41,7 +41,7 @@
             "actions": [
                 {
                     "action": "read",
-                    "memoryLocation": "y",
+                    "memoryLocation": "x",
                     "variable": "r2"
                 },
                 {
@@ -61,17 +61,17 @@
         {
             "type": "variable",
             "id": "r1",
-            "value": 0
+            "value": 2
         },
         {
             "type": "variable",
             "id": "r2",
-            "value": 1
+            "value": 2
         },
         {
             "type": "variable",
             "id": "r3",
-            "value": 0
+            "value": 1
         }
     ]
 }
