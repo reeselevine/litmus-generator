@@ -117,7 +117,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def write_repr(self, instr):
         template = ""
         if instr.use_rmw:
-            template = "atomicExchange(a{}, {}u);"
+            template = "let unused = atomicExchange(a{}, {}u);"
         else:
             template = "atomicStore(a{}, {}u);"
         return template.format(instr.mem_loc, instr.value)
