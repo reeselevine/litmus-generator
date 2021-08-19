@@ -36,11 +36,17 @@ class LitmusTest:
         def __init__(self, mem_order):
             self.mem_order = mem_order
 
+    class Barrier(Instruction):
+    
+        def __init__(self, storage_type):
+            self.storage_type = storage_type
+
     class Thread:
-        def __init__(self, workgroup, local_id, instructions):
+        def __init__(self, workgroup, local_id, instructions, has_barrier):
             self.workgroup = workgroup
             self.local_id = local_id
             self.instructions = instructions
+            self.has_barrier = has_barrier
 
     def __init__(self, test_config):
         self.test_config = test_config
@@ -57,10 +63,11 @@ class LitmusTest:
     def initialize_threads(self):
         mem_loc = 0
         variable_output = 0
-        use_rmw = False
         for thread in self.test_config['threads']:
+            has_barrier = False
             instructions = []
             for instruction in thread['actions']:
+                use_rmw = False
                 if 'memoryLocation' in instruction and instruction['memoryLocation'] not in self.memory_locations:
                     self.memory_locations[instruction['memoryLocation']] = mem_loc
                     mem_loc += 1
@@ -79,11 +86,14 @@ class LitmusTest:
                     instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw))
                 if instruction['action'] == "fence":
                     instructions.append(self.MemoryFence(mem_order))
+                if instruction['action'] == "barrier":
+                    instructions.append(self.Barrier(instruction['storageType']))
+                    has_barrier = True
             if 'localId' in thread:
                 local_id = thread['localId']
             else:
                 local_id = self.DEFAULT_LOCAL_ID
-            self.threads.append(self.Thread(thread['workgroup'], local_id, instructions))
+            self.threads.append(self.Thread(thread['workgroup'], local_id, instructions, has_barrier))
 
     def initialize_post_conditions(self):
         for post_condition in self.test_config['postConditions']:
@@ -97,15 +107,15 @@ class LitmusTest:
             body_statements.append(self.generate_mem_loc(variable, mem_loc))
         for thread in self.threads:
             variables = set()
-            thread_statements = self.generate_thread_header()
+            thread_statements = self.generate_thread_header(thread.workgroup, thread.local_id, thread.has_barrier)
             for instr in thread.instructions:
                 if isinstance(instr, self.ReadInstruction):
                     variables.add(instr.variable)
-                thread_statements.append(self.backend_repr(instr))
+                thread_statements += self.backend_repr(instr, thread.workgroup, thread.local_id, thread.has_barrier)
             for variable in variables:
                 thread_statements.append(self.results_repr(variable))
             thread_statements = ["    {}".format(statement) for statement in thread_statements]
-            body_statements = body_statements + ["  {}".format(self.thread_filter(first_thread, thread.workgroup, thread.local_id))] + thread_statements
+            body_statements = body_statements + ["  {}".format(self.thread_filter(first_thread, thread.workgroup, thread.local_id, thread.has_barrier))] + thread_statements
             first_thread = False
         body_statements = body_statements + ["  \n".join(self.generate_stress_call())]
         shader = "\n".join([self.generate_shader_def()] + body_statements + ["}\n"])
@@ -124,30 +134,35 @@ class LitmusTest:
     def generate_mem_loc(self, variable, mem_loc):
         pass
 
-    def generate_thread_header(self):
+    def generate_thread_header(self, workgroup, local_id, has_barrier):
         pass
 
-    def backend_repr(self, instr):
+    def backend_repr(self, instr, workgroup, local_id, has_barrier):
         if isinstance(instr, self.ReadInstruction):
-            return self.read_repr(instr)
+            return self.read_repr(instr, workgroup, local_id, has_barrier)
         elif isinstance(instr, self.WriteInstruction):
-            return self.write_repr(instr)
+            return self.write_repr(instr, workgroup, local_id, has_barrier)
         elif isinstance(instr, self.MemoryFence):
             return self.fence_repr(instr)
+        elif isinstance(instr, self.Barrier):
+            return self.barrier_repr(instr)
 
-    def read_repr(self, instr):
+    def read_repr(self, instr, workgroup, local_id, has_barrier):
         pass
 
-    def write_repr(self, instr):
+    def write_repr(self, instr, workgroup, local_id, has_barrier):
         pass
 
     def fence_repr(self, instr):
         pass
 
+    def barrier_repr(self, instr):
+        pass
+
     def results_repr(self, variable):
        pass 
 
-    def thread_filter(self, first_thread, workgroup, thread):
+    def thread_filter(self, first_thread, workgroup, thread, has_barrier):
         pass
 
     def generate_stress_call(self):

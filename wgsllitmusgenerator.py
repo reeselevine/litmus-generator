@@ -39,31 +39,40 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def generate_mem_loc(self, variable, mem_loc):
         return "  let a{} = &test_data.value[mem_locations.value[{}]];".format(variable, mem_loc)
 
-    def generate_thread_header(self):
-        return [
-            "if (mem_stress == 1u) {",
+    def generate_thread_header(self, workgroup, local_id, has_barrier):
+        statements = [
+            "if (pre_stress == 1u) {",
             "  do_stress(stress_params.value[5], stress_params.value[6], workgroup_id[0]);",
             "}",
             "if (do_barrier == 1u) {",
             "  spin();",
             "}"
         ]
+        if has_barrier:
+          to_return = ["if (global_id == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, local_id)]
+          to_return += ["  {}".format(statement) for statement in statements]
+          to_return += ["}"]
+          return to_return
+        else:
+          return statements
 
     def generate_types(self):
         atomic_type = ["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"]
         normal_type = ["[[block]] struct Memory {", "  value: array<u32>;", "};"]
-        return "\n".join(atomic_type + normal_type)
+        stress_params_type = ["[[block]] struct StressParamsMemory {", "  value: [[stride(16)]] array<u32, 7>;", "};"]
+        return "\n".join(atomic_type + normal_type + stress_params_type)
 
     def generate_bindings(self):
         bindings = [
             "[[group(0), binding(0)]] var<storage, read_write> test_data : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> mem_locations : Memory;",
-            "[[group(0), binding(2)]] var<storage, read_write> results : AtomicMemory;",
-            "[[group(0), binding(3)]] var<storage, read_write> shuffled_ids : Memory;",
-            "[[group(0), binding(4)]] var<storage, read_write> barrier : AtomicMemory;",
-            "[[group(0), binding(5)]] var<storage, read_write> scratchpad : Memory;",
-            "[[group(0), binding(6)]] var<storage, read_write> scratch_locations : Memory;",
-            "[[group(0), binding(7)]] var<storage, read_write> stress_params : Memory;"
+            "[[group(0), binding(1)]] var<storage, read_write> atomic_test_data : AtomicMemory;",
+            "[[group(0), binding(2)]] var<storage, read_write> mem_locations : Memory;",
+            "[[group(0), binding(3)]] var<storage, read_write> results : Memory;",
+            "[[group(0), binding(4)]] var<storage, read_write> shuffled_ids : Memory;",
+            "[[group(0), binding(5)]] var<storage, read_write> barrier : AtomicMemory;",
+            "[[group(0), binding(6)]] var<storage, read_write> scratchpad : Memory;",
+            "[[group(0), binding(7)]] var<storage, read_write> scratch_locations : Memory;",
+            "[[group(0), binding(8)]] var<uniform> stress_params : Memory;"
         ]
         return "\n".join(bindings)
 
@@ -106,34 +115,61 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         ]
         return "\n".join(body)
 
-    def read_repr(self, instr):
-        template = ""
+    def read_repr(self, instr, workgroup, local_id, has_barrier):
         if instr.use_rmw:
-            template = "let {} = atomicAdd(a{}, 0u);"
+            template = "atomicAdd(a{}, 0u);"
         else:
-            template = "let {} = atomicLoad(a{});"
-        return template.format(instr.variable, instr.mem_loc)
+            template = "atomicLoad(a{});"
+        full_instr = template.format(instr.mem_loc)
+        if has_barrier:
+            statements = [
+                "var {}: u32;".format(instr.variable),
+                "if (global_id == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, local_id),
+                "  {} = {};".format(instr.variable, full_instr),
+                "}"
+            ]
+            return statements
+        else:
+            return ["let {} = {};".format(instr.variable, full_instr)]
 
-    def write_repr(self, instr):
-        template = ""
+    def write_repr(self, instr, workgroup, local_id, has_barrier):
         if instr.use_rmw:
             template = "let unused = atomicExchange(a{}, {}u);"
         else:
             template = "atomicStore(a{}, {}u);"
-        return template.format(instr.mem_loc, instr.value)
+        full_instr = template.format(instr.mem_loc, instr.value)
+        if has_barrier:
+            statements = [
+                "if (global_id == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, local_id),
+                "  " + full_instr,
+                "}"
+            ]
+            return statements
+        else:
+            return [full_instr]
 
     def fence_repr(self, instr):
         pass
 
-    def results_repr(self, variable):
-        return "atomicStore(&results.value[{}], {});".format(self.variables[variable], variable)
+    def barrier_repr(self, instr):
+        if instr.storage_type == "storage":
+            return ["storageBarrier();"]
+        elif instr.storage_type == "workgroup":
+            return ["workgroupBarier();"]
 
-    def thread_filter(self, first_thread, workgroup, thread):
+    def results_repr(self, variable):
+        return "results.value[{}] = {};".format(self.variables[variable], variable)
+
+    def thread_filter(self, first_thread, workgroup, local_id, has_barrier):
         if first_thread:
             start = "if"
         else:
             start = "} elseif"
-        return start + " (shuffled_ids.value[global_invocation_id[0]] == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, thread)
+        if has_barrier:
+          filter = " (global_id >= u32(workgroupXSize) * {}u && global_id < ({}u + 1u)*u32(workgroupXSize)) {{".format(workgroup, workgroup)
+        else:
+          filter = " (global_id == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, local_id)
+        return start + filter
 
     def generate_stress_call(self):
         return [
@@ -146,6 +182,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "\n".join([
             "let workgroupXSize = 1;",
             "[[stage(compute), workgroup_size(workgroupXSize)]] fn main([[builtin(workgroup_id)]] workgroup_id : vec3<u32>, [[builtin(global_invocation_id)]] global_invocation_id : vec3<u32>, [[builtin(local_invocation_index)]] local_invocation_index : u32) {",
-            "  let mem_stress = stress_params.value[4];",
-            "  let do_barrier = stress_params.value[0];"
+            "  let pre_stress = stress_params.value[4];",
+            "  let do_barrier = stress_params.value[0];",
+            "  let global_id = shuffled_ids.value[global_invocation_id[0]];"
         ])
