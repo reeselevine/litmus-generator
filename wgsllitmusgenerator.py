@@ -37,7 +37,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return ".wgsl"
 
     def generate_mem_loc(self, variable, mem_loc):
-        return "  let a{} = &test_data.value[mem_locations.value[{}]];".format(variable, mem_loc)
+        return "  let a{} = &atomic_test_data.value[mem_locations.value[{}]];".format(variable, mem_loc)
 
     def generate_thread_header(self, workgroup, local_id, has_barrier):
         statements = [
@@ -64,7 +64,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def generate_bindings(self):
         bindings = [
-            "[[group(0), binding(0)]] var<storage, read_write> test_data : AtomicMemory;",
+            "[[group(0), binding(0)]] var<storage, read_write> test_data : Memory;",
             "[[group(0), binding(1)]] var<storage, read_write> atomic_test_data : AtomicMemory;",
             "[[group(0), binding(2)]] var<storage, read_write> mem_locations : Memory;",
             "[[group(0), binding(3)]] var<storage, read_write> results : Memory;",
@@ -72,7 +72,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "[[group(0), binding(5)]] var<storage, read_write> barrier : AtomicMemory;",
             "[[group(0), binding(6)]] var<storage, read_write> scratchpad : Memory;",
             "[[group(0), binding(7)]] var<storage, read_write> scratch_locations : Memory;",
-            "[[group(0), binding(8)]] var<uniform> stress_params : Memory;"
+            "[[group(0), binding(8)]] var<uniform> stress_params : StressParamsMemory;"
         ]
         return "\n".join(bindings)
 
