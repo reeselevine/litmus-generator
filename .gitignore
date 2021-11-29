@@ -1,5 +1,6 @@
 *-variants
 !minimally-forbidden-variants
+*.csv
 __pycache__
 target/
 results/

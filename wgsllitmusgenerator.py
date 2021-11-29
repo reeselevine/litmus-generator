@@ -125,7 +125,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             statements = [
                 "var {}: u32;".format(instr.variable),
                 "if (global_id == u32(workgroupXSize) * {}u + {}u) {{".format(workgroup, local_id),
-                "  {} = {};".format(instr.variable, full_instr),
+                "  {} = {}".format(instr.variable, full_instr),
                 "}"
             ]
             return statements
