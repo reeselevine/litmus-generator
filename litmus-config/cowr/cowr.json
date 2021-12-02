@@ -1,0 +1,94 @@
+{
+  "testName": "cowr",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        },
+        {
+          "action": "read",
+          "memoryLocation": "y",
+          "variable": "r0"
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "interleaved": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    },
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-    "testName": "corw2",
+    "testName": "eval-wr-buggy",
     "threads": [
         {
             "workgroup": 0,
@@ -9,14 +9,14 @@
                     "memoryLocation": "x",
                     "variable": "r0",
 		            "memoryOrder": "relaxed",
-                    "useRMW": false
+                    "useRMW": false 
                 },
                 {
                     "action": "write",
-                    "memoryLocation": "x",
+                    "memoryLocation": "y",
                     "value": 1,
 		            "memoryOrder": "relaxed",
-                    "useRMW": false
+                    "useRMW": false 
                 }
             ]
         },
@@ -28,7 +28,26 @@
                     "memoryLocation": "x",
                     "value": 2,
 		            "memoryOrder": "relaxed",
-                    "useRMW": false
+                    "useRMW": false 
+                }
+            ]
+        },
+        {
+            "workgroup": 2,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r1",
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r2",
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
                 }
             ]
         }
@@ -40,9 +59,14 @@
             "value": 2
         },
         {
-            "type": "memory",
-            "id": "x",
+            "type": "variable",
+            "id": "r1",
             "value": 2
+        },
+        {
+            "type": "variable",
+            "id": "r2",
+            "value": 1
         }
     ]
 }

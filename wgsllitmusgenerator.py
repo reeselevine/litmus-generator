@@ -49,22 +49,26 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "let {}_{} = &test_locations.value[{} * stress_params.mem_stride * 2u{}];".format(mem_loc, i, base, offset_template)
 
     def generate_threads_header(self, test_mem_locs):
-        new_local_id = "let local_id_1 = permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize));"
+        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize));"
+        suffix = []
+        if len(self.threads) > 1:
+            if self.same_workgroup:
+                suffix = ["let id_1 = {}".format(new_local_id)]
+            else:
+                suffix = [
+                    "let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);",
+                    "let id_1 = new_workgroup * u32(workgroupXSize) + {};".format(new_local_id)
+                ]
         if self.same_workgroup:
-            ids = [
+            prefix = [
                 "let total_ids = u32(workgroupXSize);",
-                "let id_0 = local_invocation_id[0];",
-                new_local_id,
-                "let id_1 = local_id_1;"
+                "let id_0 = local_invocation_id[0];"
             ]
             spin = "  spin(u32(workgroupXSize));"
         else:
-            ids = [
+            prefix = [
                 "let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;",
-                "let id_0 = shuffled_workgroup * u32(workgroupXSize) + local_invocation_id[0];",
-                "let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);",
-                new_local_id,
-                "let id_1 = new_workgroup * u32(workgroupXSize) + local_id_1;"
+                "let id_0 = shuffled_workgroup * u32(workgroupXSize) + local_invocation_id[0];"
             ]
             spin = "  spin(u32(workgroupXSize) * stress_params.testing_workgroups);"
         statements = [
@@ -75,7 +79,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             spin,
             "}"
         ]
-        return ids + test_mem_locs + statements
+        return prefix + suffix + test_mem_locs + statements
 
     def generate_result_type(self):
         statements = ["[[block]] struct TestResults {"]
@@ -217,7 +221,8 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             if condition.output_type == "variable":
                 template = "{} == {}u"
             elif condition.output_type == "memory":
-                template = "atomicLoad(&test_locations.value[{}_1]) == {}u"
+                i = len(self.threads) - 1
+                template = "atomicLoad({{}}_{}) == {{}}u".format(i)
             return template.format(condition.identifier, condition.value)
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":

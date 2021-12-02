@@ -1,0 +1,31 @@
+{
+  "testName": "corw1",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "read",
+          "memoryLocation": "x",
+          "variable": "r0"
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq": {
+      "type": "variable",
+      "id": "r0",
+      "value": 0
+    },
+    "weak": {
+      "type": "variable",
+      "id": "r0",
+      "value": 1
+    }
+  }
+}

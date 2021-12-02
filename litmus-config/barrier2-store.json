@@ -1,5 +1,5 @@
 {
-    "testName": "read",
+    "testName": "barrier-store",
     "threads": [
         {
             "workgroup": 0,
@@ -7,7 +7,7 @@
                 {
                     "action": "write",
                     "memoryLocation": "x",
-                    "value": 1
+                    "value": 2
                 },
                 {
                     "action": "write",
@@ -20,14 +20,18 @@
             "workgroup": 1,
             "actions": [
                 {
-                    "action": "write",
+                    "action": "read",
                     "memoryLocation": "y",
-                    "value": 2
+                    "variable": "r0"
                 },
                 {
-                    "action": "read",
+                    "action": "barrier",
+                    "storageType": "storage"
+                },
+                {
+                    "action": "write",
                     "memoryLocation": "x",
-                    "variable": "r0"
+                    "value": 1
                 }
             ]
         }
@@ -35,13 +39,13 @@
     "postConditions": [
         {
             "type": "memory",
-            "id": "y",
+            "id": "x",
             "value": 2
         },
         {
             "type": "variable",
             "id": "r0",
-            "value": 0
+            "value": 1
         }
     ]
 }

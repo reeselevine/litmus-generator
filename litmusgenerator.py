@@ -67,7 +67,10 @@ class LitmusTest:
         self.threads = []
         self.behaviors = []
         self.test_name = test_config['testName']
-        self.same_workgroup = test_config['sameWorkgroup']
+        if 'sameWorkgroup' in test_config:
+          self.same_workgroup = test_config['sameWorkgroup']
+        else:
+          self.same_workgroup = False
         self.initialize_threads()
         self.initialize_behaviors()
 

@@ -1,5 +1,5 @@
 {
-    "testName": "2+2-write",
+    "testName": "barrier-store",
     "threads": [
         {
             "workgroup": 0,
@@ -7,12 +7,16 @@
                 {
                     "action": "write",
                     "memoryLocation": "x",
-                    "value": 1
+                    "value": 2
+                },
+                {
+                    "action": "barrier",
+                    "storageType": "storage"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "y",
-                    "value": 2
+                    "value": 1
                 }
             ]
         },
@@ -20,14 +24,18 @@
             "workgroup": 1,
             "actions": [
                 {
-                    "action": "write",
+                    "action": "read",
                     "memoryLocation": "y",
-                    "value": 1
+                    "variable": "r0"
+                },
+                {
+                    "action": "barrier",
+                    "storageType": "storage"
                 },
                 {
                     "action": "write",
                     "memoryLocation": "x",
-                    "value": 2
+                    "value": 1
                 }
             ]
         }
@@ -36,11 +44,11 @@
         {
             "type": "memory",
             "id": "x",
-            "value": 1
+            "value": 2
         },
         {
-            "type": "memory",
-            "id": "y",
+            "type": "variable",
+            "id": "r0",
             "value": 1
         }
     ]
