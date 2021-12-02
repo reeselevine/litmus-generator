@@ -36,15 +36,17 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def file_ext(self):
         return ".wgsl"
 
-    def generate_mem_loc(self, mem_loc, i, j, permuted):
-        if permuted:
-            intermediate = "let temp_{}_{} = permute_id(id_{}, stress_params.permute_second, total_ids);".format(i, j, i)
+    def generate_mem_loc(self, mem_loc, i, offset):
+        if offset == 0:
+            base = "id_{}".format(i);
+            offset_template = ""
         else:
-            intermediate = "let temp_{}_{} = id_{};".format(i, j, i);
-        return [
-            intermediate,
-            "let {}_{} = temp_{}_{} * stress_params.mem_stride * 2u + {}u * stress_params.location_offset;".format(mem_loc, i, i, j, j)
-        ]
+            base = "permute_id(id_{}, stress_params.permute_second, total_ids)".format(i)
+            if offset == 1:
+                offset_template = " + stress_params.location_offset"
+            else:
+                offset_template = " + {}u * stress_params.location_offset".format(offset)
+        return "let {}_{} = &test_locations.value[{} * stress_params.mem_stride * 2u{}];".format(mem_loc, i, base, offset_template)
 
     def generate_threads_header(self, test_mem_locs):
         new_local_id = "let local_id_1 = permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize));"
@@ -83,10 +85,10 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return statements
 
     def generate_types(self):
-        results_type = self.generate_result_type()
-        atomic_type = ["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"]
-        normal_type = ["[[block]] struct Memory {", "  value: array<u32>;", "};"]
-        stress_params_type = [
+        results_type = "\n".join(self.generate_result_type())
+        atomic_type = "\n".join(["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
+        normal_type = "\n".join(["[[block]] struct Memory {", "  value: array<u32>;", "};"])
+        stress_params_type = "\n".join([
             "[[block]] struct StressParamsMemory {",
             "  [[size(16)]] do_barrier: u32;",
             "  [[size(16)]] mem_stress: u32;",
@@ -101,8 +103,8 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "  [[size(16)]] mem_stride: u32;",
             "  [[size(16)]] location_offset: u32;",
             "};"
-        ]
-        return "\n".join(results_type + atomic_type + normal_type + stress_params_type)
+        ])
+        return "\n\n".join([results_type, atomic_type, normal_type, stress_params_type])
 
     def generate_bindings(self):
         bindings = [
@@ -124,8 +126,8 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             ""
         ]
         stripe_fn = [
-            "fn stripe_workgroup(workgroup_id: u32, local_id: u32, testing_workgroups: u32) -> u32 {",
-            "  return (workgroup_id + 1u + local_id % (testing_workgroups - 1u)) % testing_workgroups;",
+            "fn stripe_workgroup(workgroup_id: u32, local_id: u32) -> u32 {",
+            "  return (workgroup_id + 1u + local_id % (stress_params.testing_workgroups - 1u)) % stress_params.testing_workgroups;",
             "}"
         ]
         return "\n".join(permute_fn + stripe_fn)
@@ -171,10 +173,10 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def read_repr(self, instr, i):
         if instr.use_rmw:
-            template = "atomicAdd({}_{}, 0u);"
+            template = "let {} = atomicAdd({}_{}, 0u);"
         else:
-            template = "atomicLoad({}_{});"
-        return template.format(instr.mem_loc, i)
+            template = "let {} = atomicLoad({}_{});"
+        return template.format(instr.variable, instr.mem_loc, i)
 
     def write_repr(self, instr, i):
         if instr.use_rmw:
@@ -235,5 +237,6 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
                 template = "}} elseif ({}) {{"
             statements.append(template.format(condition))
             statements.append("  atomicAdd(&results.{}, 1u);".format(behavior.key))
+            first_behavior = False
         statements.append("}")
         return statements

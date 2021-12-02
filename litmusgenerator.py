@@ -113,14 +113,15 @@ class LitmusTest:
         variable_init = []
         test_mem_locs = []
         test_instrs = []
+        variable_offsets = {}
         i = 0
         for thread in self.threads:
             j = 0
-            permuted = False
             for instr in thread.instructions:
                 if not isinstance(instr, self.Fence):
-                    test_mem_locs = test_mem_locs + self.generate_mem_loc(instr.mem_loc, i, j, permuted)
-                    permuted = True
+                    if instr.mem_loc not in variable_offsets:
+                        variable_offsets[instr.mem_loc] = j
+                    test_mem_locs.append(self.generate_mem_loc(instr.mem_loc, i, variable_offsets[instr.mem_loc]))
                     j += 1
                 test_instrs.append(self.backend_repr(instr, i))
             i += 1
