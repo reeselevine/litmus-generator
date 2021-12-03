@@ -71,17 +71,4 @@
       ]
     }
   }
-
-  "postConditions": [
-    {
-      "type": "variable",
-      "id": "r0",
-      "value": 0
-    },
-    {
-      "type": "memory",
-      "id": "x",
-      "value": 1
-    }
-  ]
 }

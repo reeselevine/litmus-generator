@@ -222,11 +222,24 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
                 template = "{} == {}u"
             elif condition.output_type == "memory":
                 i = len(self.threads) - 1
-                template = "atomicLoad({{}}_{}) == {{}}u".format(i)
+                template = "mem_{{}}_{} == {{}}u".format(i)
             return template.format(condition.identifier, condition.value)
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":
                 return "(" + " && ".join([self.generate_post_condition(cond) for cond in condition.conditions]) + ")"
+
+    def generate_post_condition_loads(self, condition, seen_ids):
+        result = []
+        if isinstance(condition, self.PostConditionLeaf):
+            if condition.output_type == "memory" and condition.identifier not in seen_ids:
+                seen_ids.add(condition.identifier)
+                i = len(self.threads) - 1
+                var = "{}_{}".format(condition.identifier, len(self.threads) - 1)
+                result.append("let mem_{} = atomicLoad({});".format(var, var))
+        elif isinstance(condition, self.PostConditionNode):
+            for cond in condition.conditions:
+                result += self.generate_post_condition_loads(cond, seen_ids)
+        return result
 
     def generate_result_storage(self, behaviors):
         if self.same_workgroup:
@@ -234,6 +247,9 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         else:
             statements = ["storageBarrier();"]
         first_behavior = True
+        seen_ids = set()
+        for behavior in behaviors:
+            statements += self.generate_post_condition_loads(behavior.post_condition, seen_ids)
         for behavior in behaviors:
             condition = self.generate_post_condition(behavior.post_condition)
             if first_behavior:
