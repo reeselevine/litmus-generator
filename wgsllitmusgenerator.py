@@ -87,7 +87,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "  r1: atomic<u32>;",
             "};"
         ]
-    
+
     def generate_test_result_type(self):
         statements = ["[[block]] struct TestResults {"]
         for behavior in self.behaviors:
@@ -166,7 +166,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "\n\n".join([self.generate_types(), self.generate_bindings(), self.generate_helper_fns()])
 
     def generate_result_meta(self):
-        return "\n\n".join([self.generate_result_types(), self.generate_result_bindings()])
+        return "\n\n".join([self.generate_result_types(), self.generate_result_bindings(), self.generate_helper_fns()])
 
     def generate_stress(self):
         body = [
@@ -257,6 +257,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def generate_result_shader_def(self):
         return "\n".join(self.generate_common_shader_def() + [
+            "  let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;",
             "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
         ])
 
@@ -282,7 +283,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
                 elif condition.output_type == "memory":
                     result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier]))
                     var = "{}_0".format(condition.identifier)
-                    result.append("let mem_{} = atomicLoad({})".format(var, var))
+                    result.append("let mem_{} = atomicLoad({});".format(var, var))
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 result += self.generate_post_condition_loads(cond, seen_ids)
