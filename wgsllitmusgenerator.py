@@ -1,4 +1,3 @@
-import os
 import litmusgenerator
 
 class WgslLitmusTest(litmusgenerator.LitmusTest):
@@ -81,18 +80,23 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         ]
         return prefix + suffix + test_mem_locs + statements
 
-    def generate_result_type(self):
+    def generate_read_result_type(self):
+        return [
+            "struct ReadResult {",
+            "  r0: atomic<u32>;",
+            "  r1: atomic<u32>;",
+            "};"
+        ]
+    
+    def generate_test_result_type(self):
         statements = ["[[block]] struct TestResults {"]
         for behavior in self.behaviors:
             statements.append("  {}: atomic<u32>;".format(behavior.key))
         statements.append("};")
         return statements
 
-    def generate_types(self):
-        results_type = "\n".join(self.generate_result_type())
-        atomic_type = "\n".join(["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
-        normal_type = "\n".join(["[[block]] struct Memory {", "  value: array<u32>;", "};"])
-        stress_params_type = "\n".join([
+    def generate_stress_params_type(self):
+        return [
             "[[block]] struct StressParamsMemory {",
             "  [[size(16)]] do_barrier: u32;",
             "  [[size(16)]] mem_stress: u32;",
@@ -107,13 +111,27 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "  [[size(16)]] mem_stride: u32;",
             "  [[size(16)]] location_offset: u32;",
             "};"
-        ])
-        return "\n\n".join([results_type, atomic_type, normal_type, stress_params_type])
+        ]
+
+    def generate_common_types(self):
+        atomic_type = "\n".join(["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
+        read_result_type = "\n".join(self.generate_read_result_type())
+        read_results_type = "\n".join(["[[block]] struct ReadResults {", "  value: array<ReadResult>;", "};"])
+        stress_params_type = "\n".join(self.generate_stress_params_type())
+        return [atomic_type, read_result_type, read_results_type, stress_params_type]
+
+    def generate_types(self):
+        normal_type = "\n".join(["[[block]] struct Memory {", "  value: array<u32>;", "};"])
+        return "\n\n".join([normal_type] + self.generate_common_types())
+
+    def generate_result_types(self):
+        test_result_type = "\n".join(self.generate_test_result_type())
+        return "\n\n".join([test_result_type] + self.generate_common_types())
 
     def generate_bindings(self):
         bindings = [
             "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> results : TestResults;",
+            "[[group(0), binding(1)]] var<storage, read_write> results : ReadResults;",
             "[[group(0), binding(2)]] var<storage, read_write> shuffled_workgroups : Memory;",
             "[[group(0), binding(3)]] var<storage, read_write> barrier : AtomicMemory;",
             "[[group(0), binding(4)]] var<storage, read_write> scratchpad : Memory;",
@@ -121,6 +139,14 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "[[group(0), binding(6)]] var<uniform> stress_params : StressParamsMemory;"
         ]
         return "\n".join(bindings)
+
+    def generate_result_bindings(self):
+        return "\n".join([
+            "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
+            "[[group(0), binding(1)]] var<storage, read_write> read_results : ReadResults;",
+            "[[group(0), binding(2)]] var<storage, read_write> test_results : TestResults;",
+            "[[group(0), binding(3)]] var<uniform> stress_params : StressParamsMemory;"
+        ])
 
     def generate_helper_fns(self):
         permute_fn = [
@@ -138,6 +164,9 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def generate_meta(self):
         return "\n\n".join([self.generate_types(), self.generate_bindings(), self.generate_helper_fns()])
+
+    def generate_result_meta(self):
+        return "\n\n".join([self.generate_result_types(), self.generate_result_bindings()])
 
     def generate_stress(self):
         body = [
@@ -198,12 +227,23 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         elif instr.storage_type == "workgroup":
             return "workgroupBarier();"
 
+    def results_repr(self, variable, i):
+        return "atomicStore(&results.value[id_{}].{}, {});".format(i, variable, variable)
+
     def generate_stress_call(self):
         return [
             "  } elseif (stress_params.mem_stress == 1u) {",
             "    do_stress(stress_params.mem_stress_iterations, stress_params.mem_stress_pattern, shuffled_workgroup);",
             "  }"
         ]
+
+    def generate_common_shader_def(self):
+      return [
+          "let workgroupXSize = 256;",
+          "[[stage(compute), workgroup_size(workgroupXSize)]] fn main(",
+          "  [[builtin(local_invocation_id)]] local_invocation_id : vec3<u32>,",
+          "  [[builtin(workgroup_id)]] workgroup_id : vec3<u32>) {"
+      ]
 
     def generate_shader_def(self):
         return "\n".join([
@@ -215,14 +255,18 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "  if (shuffled_workgroup < stress_params.testing_workgroups) {"
         ])
 
+    def generate_result_shader_def(self):
+        return "\n".join(self.generate_common_shader_def() + [
+            "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
+        ])
+
     def generate_post_condition(self, condition):
         if isinstance(condition, self.PostConditionLeaf):
             template = ""
             if condition.output_type == "variable":
                 template = "{} == {}u"
             elif condition.output_type == "memory":
-                i = len(self.threads) - 1
-                template = "mem_{{}}_{} == {{}}u".format(i)
+                template = "mem_{}_0 == {}u"
             return template.format(condition.identifier, condition.value)
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":
@@ -231,33 +275,33 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def generate_post_condition_loads(self, condition, seen_ids):
         result = []
         if isinstance(condition, self.PostConditionLeaf):
-            if condition.output_type == "memory" and condition.identifier not in seen_ids:
+            if condition.identifier not in seen_ids:
                 seen_ids.add(condition.identifier)
-                i = len(self.threads) - 1
-                var = "{}_{}".format(condition.identifier, len(self.threads) - 1)
-                result.append("let mem_{} = atomicLoad({});".format(var, var))
+                if condition.output_type == "variable":
+                    result.append("let {} = atomicLoad(&read_results.value[id_0].{});".format(condition.identifier, condition.identifier))
+                elif condition.output_type == "memory":
+                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier]))
+                    var = "{}_0".format(condition.identifier)
+                    result.append("let mem_{} = atomicLoad({})".format(var, var))
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 result += self.generate_post_condition_loads(cond, seen_ids)
         return result
 
-    def generate_result_storage(self, behaviors):
-        if self.same_workgroup:
-            statements = ["workgroupBarrier();"]
-        else:
-            statements = ["storageBarrier();"]
+    def generate_result_storage(self):
         first_behavior = True
+        statements = []
         seen_ids = set()
-        for behavior in behaviors:
+        for behavior in self.behaviors:
             statements += self.generate_post_condition_loads(behavior.post_condition, seen_ids)
-        for behavior in behaviors:
+        for behavior in self.behaviors:
             condition = self.generate_post_condition(behavior.post_condition)
             if first_behavior:
                 template = "if ({}) {{"
             else:
                 template = "}} elseif ({}) {{"
             statements.append(template.format(condition))
-            statements.append("  atomicAdd(&results.{}, 1u);".format(behavior.key))
+            statements.append("  atomicAdd(&test_results.{}, 1u);".format(behavior.key))
             first_behavior = False
         statements.append("}")
         return statements
