@@ -35,7 +35,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def file_ext(self):
         return ".wgsl"
 
-    def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup"):
+    def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup", use_local_id=False):
         shift_mem_loc = ""
         if should_shift:
             shift_mem_loc = "{} * u32(workgroupXSize) + ".format(workgroup_id)
@@ -43,7 +43,11 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             base = "{}id_{}".format(shift_mem_loc, i);
             offset_template = ""
         else:
-            base = "{}permute_id(id_{}, stress_params.permute_second, total_ids)".format(shift_mem_loc, i)
+            if use_local_id:
+                to_permute = "local_invocation_id[0]"
+            else:
+                to_permute = "id_{}".format(i)
+            base = "{}permute_id({}, stress_params.permute_second, total_ids)".format(shift_mem_loc, to_permute)
             if offset == 1:
                 offset_template = " + stress_params.location_offset"
             else:
@@ -303,20 +307,20 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
 
     def generate_post_condition_stores(self, condition, seen_ids):
         result = []
-        shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize) + "
+        shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize)"
         if isinstance(condition, self.PostConditionLeaf):
             if condition.identifier not in seen_ids:
                 seen_ids.add(condition.identifier)
                 if condition.output_type == "variable":
                     variable = condition.identifier
                     if self.same_workgroup:
-                        shift = shift_mem_loc
+                        shift = "{} + ".format(shift_mem_loc)
                     else:
                         shift = ""
                     result.append("atomicStore(&results.value[{}id_{}].{}, {});".format(shift, self.read_threads[variable], variable, variable))
                 elif condition.output_type == "memory" and self.workgroup_memory:
                     mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
-                    result.append("atomicStore(&test_locations.value[{}{}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
+                    result.append("atomicStore(&test_locations.value[{} * stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 result += self.generate_post_condition_stores(cond, seen_ids)
@@ -331,7 +335,13 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
                 if condition.output_type == "variable":
                     result.append("let {} = atomicLoad(&read_results.value[id_0].{});".format(condition.identifier, condition.identifier))
                 elif condition.output_type == "memory":
-                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], False, "workgroup_id[0]"))
+                    shift = False
+                    use_local_id = False
+                    if self.same_workgroup:
+                        use_local_id = True
+                        if self.variable_offsets[condition.identifier] > 0:
+                            shift = True
+                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], shift, "workgroup_id[0]", use_local_id))
                     var = "{}_0".format(condition.identifier)
                     result.append("let mem_{} = atomicLoad(&test_locations.value[{}]);".format(var, var))
         elif isinstance(condition, self.PostConditionNode):
