@@ -35,10 +35,10 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
     def file_ext(self):
         return ".wgsl"
 
-    def generate_mem_loc(self, mem_loc, i, offset, should_shift):
+    def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup"):
         shift_mem_loc = ""
         if should_shift:
-            shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize) + "
+            shift_mem_loc = "{} * u32(workgroupXSize) + ".format(workgroup_id)
         if offset == 0:
             base = "{}id_{}".format(shift_mem_loc, i);
             offset_template = ""
@@ -142,7 +142,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
             "[[group(0), binding(6)]] var<uniform> stress_params : StressParamsMemory;"
         ]
         if self.workgroup_memory:
-            bindings += ["", "var<workgroup> wg_test_locations: array<atomic<u32>, 1024>;"]
+            bindings += ["", "var<workgroup> wg_test_locations: array<atomic<u32>, 3584>;"]
         return "\n".join(bindings)
 
     def generate_result_bindings(self):
@@ -273,9 +273,13 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         ])
 
     def generate_result_shader_def(self):
+        if self.same_workgroup:
+            total_ids = "  let total_ids = u32(workgroupXSize);"
+        else:
+            total_ids = "  let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;"
         return "\n".join(self.generate_common_shader_def() + [
-            "  let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;",
-            "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
+          total_ids,
+          "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
         ])
 
     def generate_post_condition(self, condition):
@@ -327,7 +331,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
                 if condition.output_type == "variable":
                     result.append("let {} = atomicLoad(&read_results.value[id_0].{});".format(condition.identifier, condition.identifier))
                 elif condition.output_type == "memory":
-                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], True))
+                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], False, "workgroup_id[0]"))
                     var = "{}_0".format(condition.identifier)
                     result.append("let mem_{} = atomicLoad(&test_locations.value[{}]);".format(var, var))
         elif isinstance(condition, self.PostConditionNode):

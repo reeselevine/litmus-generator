@@ -1,0 +1,106 @@
+{
+  "testName": "store-storage-workgroup-barrier",
+  "sameWorkgroup": true,
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 2
+        },
+        {
+          "action": "barrier"
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "read",
+          "memoryLocation": "y",
+          "variable": "r0"
+        },
+        {
+          "action": "barrier"
+        },
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    },
+    "interleaved": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    }
+  }
+}
