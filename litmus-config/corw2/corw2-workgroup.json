@@ -1,5 +1,7 @@
 {
-  "testName": "corw2",
+  "testName": "corw2-workgroup",
+  "sameWorkgroup": true,
+  "workgroupMemory": true,
   "threads": [
     {
       "actions": [

@@ -1,17 +1,15 @@
 {
-  "testName": "corw2",
+  "testName": "atomicity-workgroup",
+  "sameWorkgroup": true,
+  "workgroupMemory": true,
   "threads": [
     {
       "actions": [
         {
           "action": "read",
           "memoryLocation": "x",
-          "variable": "r0"
-        },
-        {
-          "action": "write",
-          "memoryLocation": "y",
-          "value": 1
+          "variable": "r0",
+          "useRMW": true
         }
       ]
     },
@@ -58,7 +56,7 @@
         }
       ]
     },
-    "interleaved": {
+    "weak": {
       "type": "op",
       "op": "and",
       "conditions": [
@@ -71,22 +69,6 @@
           "type": "memory",
           "id": "x",
           "value": 1
-        }
-      ]
-    },
-    "weak": {
-      "type": "op",
-      "op": "and",
-      "conditions": [
-        {
-          "type": "variable",
-          "id": "r0",
-          "value": 2
-        },
-        {
-          "type": "memory",
-          "id": "x",
-          "value": 2
         }
       ]
     }

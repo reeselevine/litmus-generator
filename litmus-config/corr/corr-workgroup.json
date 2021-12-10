@@ -1,6 +1,17 @@
 {
-  "testName": "corw2",
+  "testName": "corr-workgroup",
+  "sameWorkgroup": true,
+  "workgroupMemory": true,
   "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        }
+      ]
+    },
     {
       "actions": [
         {
@@ -9,18 +20,9 @@
           "variable": "r0"
         },
         {
-          "action": "write",
+          "action": "read",
           "memoryLocation": "y",
-          "value": 1
-        }
-      ]
-    },
-    {
-      "actions": [
-        {
-          "action": "write",
-          "memoryLocation": "x",
-          "value": 2
+          "variable": "r1"
         }
       ]
     }
@@ -36,9 +38,9 @@
           "value": 0
         },
         {
-          "type": "memory",
-          "id": "x",
-          "value": 2
+          "type": "variable",
+          "id": "r1",
+          "value": 0
         }
       ]
     },
@@ -49,11 +51,11 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 2
+          "value": 1
         },
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r1",
           "value": 1
         }
       ]
@@ -68,8 +70,8 @@
           "value": 0
         },
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r1",
           "value": 1
         }
       ]
@@ -81,12 +83,12 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 2
+          "value": 1
         },
         {
-          "type": "memory",
-          "id": "x",
-          "value": 2
+          "type": "variable",
+          "id": "r1",
+          "value": 0
         }
       ]
     }

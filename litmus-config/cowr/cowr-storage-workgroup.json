@@ -1,17 +1,18 @@
 {
-  "testName": "corw2",
+  "testName": "cowr-storage-workgroup",
+  "sameWorkgroup": true,
   "threads": [
     {
       "actions": [
         {
-          "action": "read",
+          "action": "write",
           "memoryLocation": "x",
-          "variable": "r0"
+          "value": 1
         },
         {
-          "action": "write",
+          "action": "read",
           "memoryLocation": "y",
-          "value": 1
+          "variable": "r0"
         }
       ]
     },
@@ -33,7 +34,7 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 0
+          "value": 1
         },
         {
           "type": "memory",
@@ -49,7 +50,7 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 2
+          "value": 1
         },
         {
           "type": "memory",
@@ -65,12 +66,12 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 0
+          "value": 2
         },
         {
           "type": "memory",
           "id": "x",
-          "value": 1
+          "value": 2
         }
       ]
     },
@@ -86,7 +87,7 @@
         {
           "type": "memory",
           "id": "x",
-          "value": 2
+          "value": 1
         }
       ]
     }
