@@ -1,18 +1,19 @@
 {
-  "testName": "2+2-write-storage-workgroup",
-  "sameWorkgroup": true,
+  "testName": "cowr-rmw",
   "threads": [
     {
       "actions": [
         {
           "action": "write",
           "memoryLocation": "x",
-          "value": 2
+          "value": 1,
+          "useRMW": true
         },
         {
-          "action": "write",
+          "action": "read",
           "memoryLocation": "y",
-          "value": 1
+          "variable": "r0",
+          "useRMW": true
         }
       ]
     },
@@ -20,13 +21,9 @@
       "actions": [
         {
           "action": "write",
-          "memoryLocation": "y",
-          "value": 2
-        },
-        {
-          "action": "write",
           "memoryLocation": "x",
-          "value": 1
+          "value": 2,
+          "useRMW": true
         }
       ]
     }
@@ -37,13 +34,13 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r0",
           "value": 1
         },
         {
           "type": "memory",
-          "id": "y",
+          "id": "x",
           "value": 2
         }
       ]
@@ -53,13 +50,13 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
-          "value": 2
+          "type": "variable",
+          "id": "r0",
+          "value": 1
         },
         {
           "type": "memory",
-          "id": "y",
+          "id": "x",
           "value": 1
         }
       ]
@@ -69,14 +66,14 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
-          "value": 1
+          "type": "variable",
+          "id": "r0",
+          "value": 2
         },
         {
           "type": "memory",
-          "id": "y",
-          "value": 1
+          "id": "x",
+          "value": 2
         }
       ]
     },
@@ -85,14 +82,14 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r0",
           "value": 2
         },
         {
           "type": "memory",
-          "id": "y",
-          "value": 2
+          "id": "x",
+          "value": 1
         }
       ]
     }

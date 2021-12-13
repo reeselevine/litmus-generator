@@ -1,18 +1,21 @@
 {
-  "testName": "2+2-write-storage-workgroup",
-  "sameWorkgroup": true,
+  "testName": "read-rmw-barrier",
   "threads": [
     {
       "actions": [
         {
           "action": "write",
           "memoryLocation": "x",
-          "value": 2
+          "value": 1
+        },
+        {
+            "action": "barrier"
         },
         {
           "action": "write",
           "memoryLocation": "y",
-          "value": 1
+          "value": 1,
+          "useRMW": true
         }
       ]
     },
@@ -21,12 +24,16 @@
         {
           "action": "write",
           "memoryLocation": "y",
-          "value": 2
+          "value": 2,
+          "useRMW": true
         },
         {
-          "action": "write",
+            "action": "barrier"
+        },
+        {
+          "action": "read",
           "memoryLocation": "x",
-          "value": 1
+          "variable": "r0"
         }
       ]
     }
@@ -37,8 +44,8 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r0",
           "value": 1
         },
         {
@@ -53,9 +60,9 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
-          "value": 2
+          "type": "variable",
+          "id": "r0",
+          "value": 0
         },
         {
           "type": "memory",
@@ -69,8 +76,8 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
+          "type": "variable",
+          "id": "r0",
           "value": 1
         },
         {
@@ -85,9 +92,9 @@
       "op": "and",
       "conditions": [
         {
-          "type": "memory",
-          "id": "x",
-          "value": 2
+          "type": "variable",
+          "id": "r0",
+          "value": 0
         },
         {
           "type": "memory",

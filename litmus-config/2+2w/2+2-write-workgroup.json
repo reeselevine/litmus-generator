@@ -8,12 +8,12 @@
         {
           "action": "write",
           "memoryLocation": "x",
-          "value": 1
+          "value": 2
         },
         {
           "action": "write",
           "memoryLocation": "y",
-          "value": 2
+          "value": 1
         }
       ]
     },
@@ -22,12 +22,12 @@
         {
           "action": "write",
           "memoryLocation": "y",
-          "value": 1
+          "value": 2
         },
         {
           "action": "write",
           "memoryLocation": "x",
-          "value": 2
+          "value": 1
         }
       ]
     }

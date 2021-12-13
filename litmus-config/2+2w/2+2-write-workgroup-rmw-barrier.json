@@ -1,6 +1,7 @@
 {
-  "testName": "2+2-write-storage-workgroup",
+  "testName": "2+2-write-workgroup-rmw-barrier",
   "sameWorkgroup": true,
+  "workgroupMemory": true,
   "threads": [
     {
       "actions": [
@@ -10,9 +11,13 @@
           "value": 2
         },
         {
+          "action": "barrier"
+        },
+        {
           "action": "write",
           "memoryLocation": "y",
-          "value": 1
+          "value": 1,
+          "useRMW": true
         }
       ]
     },
@@ -21,7 +26,11 @@
         {
           "action": "write",
           "memoryLocation": "y",
-          "value": 2
+          "value": 2,
+          "useRMW": true
+        },
+        {
+          "action": "barrier"
         },
         {
           "action": "write",
