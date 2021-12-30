@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <easyvk.h>
 
 using namespace std;
 
@@ -20,7 +21,7 @@ void run(string &shader_file, map<string, string> params) {
 		c.store(i, 0);
 	}
 	std::vector<easyvk::Buffer> bufs = {a, b, c};
-	auto program = easyvk::Program(device, shader_file, bufs);
+	auto program = easyvk::Program(device, shader_file.c_str(), bufs);
 	program.setWorkgroups(size);
 	program.setWorkgroupSize(1);
 	program.prepare();
