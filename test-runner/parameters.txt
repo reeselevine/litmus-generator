@@ -20,3 +20,4 @@ stressAssignmentStrategy=0
 permuteFirst=109
 permuteSecond=419
 aliasedMemory=0
+gpuDeviceId=7857
