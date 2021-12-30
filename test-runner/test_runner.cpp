@@ -10,7 +10,7 @@ using namespace std;
 
 const int size = 4;
 
-void run(string &shader_file, map<string, string> params)
+void run(string &shader_file, map<string, int> params)
 {
   auto instance = easyvk::Instance(false);
   auto device = instance.devices().at(0);
@@ -42,16 +42,16 @@ void run(string &shader_file, map<string, string> params)
   instance.teardown();
 }
 
-int setWorkgroupSize()
+int setWorkgroupSize(map<string, int> params)
 {
-  if (minWorkgroupSize == maxWorkgroupSize)
+  if (params["minWorkgroupSize"] == params["maxWorkgroupSize"])
   {
-    return minWorkgroupSize;
+    return params["minWorkgroupSize"];
   }
   else
   {
-    int size = rand() % (maxWorkgroupSize - minWorkgroupSize);
-    return minWorkgroupSize + size;
+    int size = rand() % (params["maxWorkgroupSize"] - params["minWorkgroupSize"]);
+    return params["minWorkgroupSize"] + size;
   }
 }
 
@@ -66,10 +66,10 @@ map<string, int> read_config(string &config_file)
     string key;
     if (getline(is_line, key, '='))
     {
-      int value;
+      string value;
       if (getline(is_line, value))
       {
-        m[key] = value;
+        m[key] = stoi(value);
       }
     }
   }
@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
     string shaderFile(argv[1]);
     string configFile(argv[2]);
     map<string, int> params = read_config(configFile);
-     for (const auto& [key, value] : m) {
+     for (const auto& [key, value] : params) {
         std::cout << key << " = " << value << "; ";
     }
     std::cout << "\n";
