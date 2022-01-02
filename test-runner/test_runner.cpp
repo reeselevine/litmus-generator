@@ -1,4 +1,5 @@
 #include <map>
+#include <set>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -28,9 +29,93 @@ Device getDevice(Instance &instance, map<string, int> params) {
   return device;
 }
 
-void clearMemory(easyvk::Buffer &gpuMem, int size) {
+void clearMemory(Buffer &gpuMem, int size) {
   for (int i = 0; i < size; i++) {
     gpuMem.store(i, 0);
+  }
+}
+
+bool percentageCheck(int percentage) {
+  return rand() % 100 < percentage;
+}
+
+void setShuffledWorkgroups(Buffer &shuffledWorkgroups, int numWorkgroups, int shufflePct) {
+  for (int i = 0; i < numWorkgroups; i++) {
+    shuffledWorkgroups.store(i, i);
+  }
+  if (percentageCheck(shufflePct)) {
+    for (int i = numWorkgroups - 1; i > 0; i--) {
+      int swap = rand() % (i + 1);
+      int temp = shuffledWorkgroups.load(i);
+      shuffledWorkgroups.store(i, shuffledWorkgroups.load(swap));
+      shuffledWorkgroups.store(swap, temp);
+    }
+  }
+}
+
+/** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
+  * workgroups to specific stress locations.
+  */
+void setScratchLocations(Buffer &locations, int numWorkgroups, map<string, int> params) {
+  set <int> usedRegions;
+  int numRegions = params["scratchMemorySize"] / params["stressLineSize"];
+  for (int i = 0; i < params["stressTargetLines"]; i++) {
+    int region = rand() % numRegions;
+    while(usedRegions.count(region))
+      region = rand() % numRegions;
+    int locInRegion = rand() % (params["stressLineSize"]);
+    switch (params["stressAssignmentStrategy"]) {
+      case 0:
+        for (int j = i; j < numWorkgroups; j += params["stressTargetLines"]) {
+          locations.store(j, (region * params["stressLineSize"]) + locInRegion);
+        }
+        break;
+      case 1:
+        int workgroupsPerLocation = numWorkgroups/params["stressTargetLines"];
+        for (int j = 0; j < workgroupsPerLocation; j++) {
+          locations.store(i*workgroupsPerLocation + j, (region * params["stressLineSize"]) + locInRegion);
+        }
+        if (i == params["stressTargetLines"] - 1 && numWorkgroups % params["stressTargetLines"] != 0) {
+          for (int j = 0; j < numWorkgroups % params["stressTargetLines"]; j++) {
+            locations.store(numWorkgroups - j - 1, (region * params["stressLineSize"]) + locInRegion);
+          }
+        }
+        break;
+    }
+  }
+}
+
+void setDynamicStressParams(Buffer &stressParams, map<string, int> params) {
+  if (percentageCheck(params["barrierPct"])) {
+    stressParams.store(0, 1);
+  } else {
+    stressParams.store(0, 0);
+  }  
+  if (percentageCheck(params["memStressPct"])) {
+    stressParams.store(1, 1);
+  } else {
+    stressParams.store(1, 0);
+  }  
+  if (percentageCheck(params["preStressPct"])) {
+    stressParams.store(4, 1);
+  } else {
+    stressParams.store(4, 0);
+  }
+}
+
+void setStaticStressParams(Buffer &stressParams, map<string, int> params) {
+  stressParams.store(2, params["memStressIterations"]);
+  stressParams.store(3, params["memStressPattern"]);
+  stressParams.store(5, params["preStressIterations"]);
+  stressParams.store(6, params["preStressPattern"]);
+  stressParams.store(7, params["permuteFirst"]);
+  stressParams.store(8, params["permuteSecond"]);
+  stressParams.store(9, params["testingWorkgroups"]);
+  stressParams.store(10, params["memStride"]);
+  if (params["aliasedMemory"] == 1) {
+    stressParams.store(11, 0);
+  } else {
+    stressParams.store(11, params["memStride"]);
   }
 }
 
@@ -63,7 +148,7 @@ int setNumWorkgroups(map<string, int> params)
 void run(string &shader_file, map<string, int> params)
 {
   // initialize settings
-  auto instance = easyvk::Instance(false);
+  auto instance = Instance(false);
   auto device = getDevice(instance, params);
   int workgroupSize = setWorkgroupSize(params);
   int testingThreads = workgroupSize * params["testingWorkgroups"];
@@ -77,6 +162,7 @@ void run(string &shader_file, map<string, int> params)
   auto scratchpad = Buffer(device, params["scratchMemorySize"]);
   auto scratchLocations = Buffer(device, params["maxWorkgroups"]);
   auto stressParams = Buffer(device, 12);
+  setStaticStressParams(stressParams, params);
   vector<Buffer> buffers = {testLocations, testResults, shuffledWorkgroups, barrier, scratchpad, scratchLocations, stressParams};
 
   // run iterations
@@ -89,15 +175,22 @@ void run(string &shader_file, map<string, int> params)
     clearMemory(testResults, 4);
     clearMemory(barrier, 1);
     clearMemory(scratchpad, params["scratchMemorySize"]);
+    setShuffledWorkgroups(shuffledWorkgroups, numWorkgroups, params["shufflePct"]);
+    setScratchLocations(scratchLocations, numWorkgroups, params);
+    setDynamicStressParams(stressParams, params);
+    program.setWorkgroups(numWorkgroups);
+    program.setWorkgroupSize(workgroupSize);
+    program.prepare();
+    //program.run();
     program.teardown();
   }
   for (Buffer buffer : buffers) {
     buffer.teardown();
   }
 
-  auto a = easyvk::Buffer(device, size);
-  auto b = easyvk::Buffer(device, size);
-  auto c = easyvk::Buffer(device, size);
+  auto a = Buffer(device, size);
+  auto b = Buffer(device, size);
+  auto c = Buffer(device, size);
   for (int i = 0; i < size; i++)
   {
     a.store(i, i);
