@@ -181,37 +181,18 @@ void run(string &shader_file, map<string, int> params)
     program.setWorkgroups(numWorkgroups);
     program.setWorkgroupSize(workgroupSize);
     program.prepare();
-    //program.run();
+    program.run();
+    cout << "Iteration " << i << "\n";
+    cout << "r0 == 0 && r1 == 0: " << testResults.load(0) << "\n";
+    cout << "r0 == 1 && r1 == 1: " << testResults.load(1) << "\n";
+    cout << "r0 == 0 && r1 == 1: " << testResults.load(2) << "\n";
+    cout << "r0 == 1 && r1 == 0: " << testResults.load(3) << "\n";
+    cout << "\n";
     program.teardown();
   }
   for (Buffer buffer : buffers) {
     buffer.teardown();
   }
-
-  auto a = Buffer(device, size);
-  auto b = Buffer(device, size);
-  auto c = Buffer(device, size);
-  for (int i = 0; i < size; i++)
-  {
-    a.store(i, i);
-    b.store(i, i + 1);
-    c.store(i, 0);
-  }
-  std::vector<easyvk::Buffer> bufs = {a, b, c};
-  auto program = easyvk::Program(device, shader_file.c_str(), bufs);
-  program.setWorkgroups(size);
-  program.setWorkgroupSize(1);
-  program.prepare();
-  program.run();
-  for (int i = 0; i < size; i++)
-  {
-    std::cout << "c[" << i << "]: " << c.load(i) << "\n";
-    assert(c.load(i) == a.load(i) + b.load(i));
-  }
-  program.teardown();
-  a.teardown();
-  b.teardown();
-  c.teardown();
   device.teardown();
   instance.teardown();
 }
