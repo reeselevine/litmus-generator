@@ -145,7 +145,7 @@ int setNumWorkgroups(map<string, int> params)
   }
 }
 
-void run(string &shader_file, map<string, int> params)
+void run(string &shader_file, string &result_shader_file, map<string, int> params)
 {
   // initialize settings
   auto instance = Instance(false);
@@ -156,6 +156,7 @@ void run(string &shader_file, map<string, int> params)
 
   // set up buffers
   auto testLocations = Buffer(device, testLocSize);
+  auto readResults = Buffer(device, params["numOutputs"] * testingThreads);
   auto testResults = Buffer(device, 4);
   auto shuffledWorkgroups = Buffer(device, params["maxWorkgroups"]);
   auto barrier = Buffer(device, 1);
@@ -163,13 +164,15 @@ void run(string &shader_file, map<string, int> params)
   auto scratchLocations = Buffer(device, params["maxWorkgroups"]);
   auto stressParams = Buffer(device, 12);
   setStaticStressParams(stressParams, params);
-  vector<Buffer> buffers = {testLocations, testResults, shuffledWorkgroups, barrier, scratchpad, scratchLocations, stressParams};
+  vector<Buffer> buffers = {testLocations, readResults, shuffledWorkgroups, barrier, scratchpad, scratchLocations, stressParams};
+  vector<Buffer> resultBuffers = {testLocations, readResults, testResults, stressParams};
 
   // run iterations
   chrono::time_point<std::chrono::system_clock> start, end;
   start = chrono::system_clock::now();
   for (int i = 0; i < params["testIterations"]; i++) {
     auto program = Program(device, shader_file.c_str(), buffers);
+    auto resultProgram = Program(device, result_shader_file.c_str(), resultBuffers);
     int numWorkgroups = setNumWorkgroups(params);
     clearMemory(testLocations, testLocSize);
     clearMemory(testResults, 4);
@@ -179,9 +182,13 @@ void run(string &shader_file, map<string, int> params)
     setScratchLocations(scratchLocations, numWorkgroups, params);
     setDynamicStressParams(stressParams, params);
     program.setWorkgroups(numWorkgroups);
+    resultProgram.setWorkgroups(params["testingWorkgroups"]);
     program.setWorkgroupSize(workgroupSize);
+    resultProgram.setWorkgroupSize(workgroupSize);
     program.prepare();
     program.run();
+    resultProgram.prepare();
+    resultProgram.run();
     cout << "Iteration " << i << "\n";
     cout << "r0 == 0 && r1 == 0: " << testResults.load(0) << "\n";
     cout << "r0 == 1 && r1 == 1: " << testResults.load(1) << "\n";
@@ -220,12 +227,12 @@ map<string, int> read_config(string &config_file)
 
 void print_help()
 {
-  cout << "Usage: ./TestRunner shaderFile paramFile\n";
+  cout << "Usage: ./TestRunner shaderFile shaderResultFile paramFile\n";
 }
 
 int main(int argc, char *argv[])
 {
-  if (argc < 3)
+  if (argc < 4)
   {
     print_help();
   }
@@ -233,13 +240,14 @@ int main(int argc, char *argv[])
   {
     srand(time(NULL));
     string shaderFile(argv[1]);
-    string configFile(argv[2]);
+    string resultShaderFile(argv[2]);
+    string configFile(argv[3]);
     map<string, int> params = read_config(configFile);
      for (const auto& [key, value] : params) {
         std::cout << key << " = " << value << "; ";
     }
     std::cout << "\n";
-    run(shaderFile, params);
+    run(shaderFile, resultShaderFile, params);
   }
   return 0;
 }

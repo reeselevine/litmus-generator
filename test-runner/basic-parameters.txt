@@ -6,6 +6,7 @@ maxWorkgroupSize=256
 shufflePct=0
 barrierPct=0
 numMemLocations=2
+numOutputs=2
 scratchMemorySize=2048
 memStride=1
 memStressPct=0
