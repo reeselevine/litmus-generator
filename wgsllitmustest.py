@@ -1,6 +1,6 @@
-import litmusgenerator
+import litmustest
 
-class WgslLitmusTest(litmusgenerator.LitmusTest):
+class WgslLitmusTest(litmustest.LitmusTest):
 
     wgsl_stress_mem_location = "scratchpad.value[addr]"
     # returns the first access in the stress pattern
