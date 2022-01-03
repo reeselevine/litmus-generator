@@ -12,6 +12,10 @@ using namespace easyvk;
 
 const int size = 4;
 
+/** Returns the GPU to use for this test run. Users can specify the specific GPU to use
+ *  with the 'gpuDeviceId' parameter. If gpuDeviceId is not included in the parameters or the specified
+ *  device cannot be found, the first device is used.
+ */
 Device getDevice(Instance &instance, map<string, int> params) {
   int idx = 0;
   if (params.find("gpuDeviceId") != params.end()) {
@@ -29,16 +33,21 @@ Device getDevice(Instance &instance, map<string, int> params) {
   return device;
 }
 
+/** Zeroes out the specified buffer. */
 void clearMemory(Buffer &gpuMem, int size) {
   for (int i = 0; i < size; i++) {
     gpuMem.store(i, 0);
   }
 }
 
+/** Checks whether a random value is less than a given percentage. Used for parameters like memory stress that should only
+ *  apply some percentage of iterations.
+ */
 bool percentageCheck(int percentage) {
   return rand() % 100 < percentage;
 }
 
+/** Assigns shuffled workgroup ids, using the shufflePct to determine whether the ids should be shuffled this iteration. */
 void setShuffledWorkgroups(Buffer &shuffledWorkgroups, int numWorkgroups, int shufflePct) {
   for (int i = 0; i < numWorkgroups; i++) {
     shuffledWorkgroups.store(i, i);
@@ -54,7 +63,9 @@ void setShuffledWorkgroups(Buffer &shuffledWorkgroups, int numWorkgroups, int sh
 }
 
 /** Sets the stress regions and the location in each region to be stressed. Uses the stress assignment strategy to assign
-  * workgroups to specific stress locations.
+  * workgroups to specific stress locations. Assignment strategy 0 corresponds to a "round-robin" assignment where consecutive
+  * threads access separate scratch locations, while assignment strategy 1 corresponds to a "chunking" assignment where a group
+  * of consecutive threads access the same location.
   */
 void setScratchLocations(Buffer &locations, int numWorkgroups, map<string, int> params) {
   set <int> usedRegions;
@@ -85,6 +96,7 @@ void setScratchLocations(Buffer &locations, int numWorkgroups, map<string, int> 
   }
 }
 
+/** These parameters vary per iteration, based on a given percentage. */
 void setDynamicStressParams(Buffer &stressParams, map<string, int> params) {
   if (percentageCheck(params["barrierPct"])) {
     stressParams.store(0, 1);
@@ -103,6 +115,7 @@ void setDynamicStressParams(Buffer &stressParams, map<string, int> params) {
   }
 }
 
+/** These parameters are static for all iterations of the test. Aliased memory is used for coherence tests. */
 void setStaticStressParams(Buffer &stressParams, map<string, int> params) {
   stressParams.store(2, params["memStressIterations"]);
   stressParams.store(3, params["memStressPattern"]);
@@ -119,38 +132,23 @@ void setStaticStressParams(Buffer &stressParams, map<string, int> params) {
   }
 }
 
-int setWorkgroupSize(map<string, int> params)
-{
-  if (params["minWorkgroupSize"] == params["maxWorkgroupSize"])
-  {
-    return params["minWorkgroupSize"];
-  }
-  else
-  {
-    int size = rand() % (params["maxWorkgroupSize"] - params["minWorkgroupSize"]);
-    return params["minWorkgroupSize"] + size;
+/** Returns a value between the min and max. */
+int setBetween(int min, int max) {
+  if (min == max) {
+    return min;
+  } else {
+    int size = rand() % (max - min);
+    return min + size;
   }
 }
 
-int setNumWorkgroups(map<string, int> params)
-{
-  if (params["testingWorkgroups"] == params["maxWorkgroups"])
-  {
-    return params["testingWorkgroups"];
-  }
-  else
-  {
-    int size = rand() % (params["maxWorkgroups"] - params["testingWorkgroups"]);
-    return params["testingWorkgroups"] + size;
-  }
-}
-
+/** A test consists of N iterations of a shader and its corresponding result shader. */
 void run(string &shader_file, string &result_shader_file, map<string, int> params)
 {
   // initialize settings
   auto instance = Instance(false);
   auto device = getDevice(instance, params);
-  int workgroupSize = setWorkgroupSize(params);
+  int workgroupSize = setBetween(params["minWorkgroupSize"], params["maxWorkgroupSize"]);
   int testingThreads = workgroupSize * params["testingWorkgroups"];
   int testLocSize = testingThreads * params["numMemLocations"] * params["memStride"];
 
@@ -173,7 +171,7 @@ void run(string &shader_file, string &result_shader_file, map<string, int> param
   for (int i = 0; i < params["testIterations"]; i++) {
     auto program = Program(device, shader_file.c_str(), buffers);
     auto resultProgram = Program(device, result_shader_file.c_str(), resultBuffers);
-    int numWorkgroups = setNumWorkgroups(params);
+    int numWorkgroups = setBetween(params["testingWorkgroups"], params["maxWorkgroups"]);
     clearMemory(testLocations, testLocSize);
     clearMemory(testResults, 4);
     clearMemory(barrier, 1);
@@ -200,10 +198,12 @@ void run(string &shader_file, string &result_shader_file, map<string, int> param
   for (Buffer buffer : buffers) {
     buffer.teardown();
   }
+  testResults.teardown();
   device.teardown();
   instance.teardown();
 }
 
+/** Reads a specified config file and stores the parameters in a map. Parameters should be of the form "key=value", one per line. */
 map<string, int> read_config(string &config_file)
 {
   map<string, int> m;
