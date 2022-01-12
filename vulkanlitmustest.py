@@ -1,7 +1,6 @@
-import os
-import litmusgenerator
+import litmustest
 
-class VulkanLitmusTest(litmusgenerator.LitmusTest):
+class VulkanLitmusTest(litmustest.LitmusTest):
 
     opencl_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
     # returns the first access in the stress pattern

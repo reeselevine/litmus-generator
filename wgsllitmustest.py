@@ -1,6 +1,6 @@
-import litmusgenerator
+import litmustest
 
-class WgslLitmusTest(litmusgenerator.LitmusTest):
+class WgslLitmusTest(litmustest.LitmusTest):
 
     wgsl_stress_mem_location = "scratchpad.value[addr]"
     # returns the first access in the stress pattern
@@ -55,7 +55,7 @@ class WgslLitmusTest(litmusgenerator.LitmusTest):
         return "let {}_{} = ({}) * stress_params.mem_stride * 2u{};".format(mem_loc, i, base, offset_template)
 
     def generate_threads_header(self, test_mem_locs):
-        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize));"
+        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize))"
         suffix = []
         if len(self.threads) > 1:
             if self.same_workgroup:
