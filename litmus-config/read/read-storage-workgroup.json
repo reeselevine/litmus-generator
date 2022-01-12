@@ -1,0 +1,100 @@
+{
+  "testName": "read-storage-workgroup",
+  "sameWorkgroup": true,
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 2
+        },
+        {
+          "action": "read",
+          "memoryLocation": "x",
+          "variable": "r0"
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 2
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 1
+        }
+      ]
+    },
+    "interleaved": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 1
+        }
+      ]
+    },
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 2
+        }
+      ]
+    }
+  }
+}

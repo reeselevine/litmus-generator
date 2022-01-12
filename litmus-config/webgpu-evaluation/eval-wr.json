@@ -1,0 +1,72 @@
+{
+    "testName": "eval-wr",
+    "threads": [
+        {
+            "workgroup": 0,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1,
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r0",
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                }
+            ]
+        },
+        {
+            "workgroup": 1,
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 2,
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                }
+            ]
+        },
+        {
+            "workgroup": 2,
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r1",
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                },
+                {
+                    "action": "read",
+                    "memoryLocation": "y",
+                    "variable": "r2",
+		            "memoryOrder": "relaxed",
+                    "useRMW": false 
+                }
+            ]
+        }
+    ],
+    "postConditions": [
+        {
+            "type": "variable",
+            "id": "r0",
+            "value": 2
+        },
+        {
+            "type": "variable",
+            "id": "r1",
+            "value": 2
+        },
+        {
+            "type": "variable",
+            "id": "r2",
+            "value": 1
+        }
+    ]
+}

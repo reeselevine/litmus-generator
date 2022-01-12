@@ -1,0 +1,95 @@
+{
+  "testName": "corw2-rmw",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "read",
+          "memoryLocation": "x",
+          "variable": "r0"
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 2,
+          "useRMW": true
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "interleaved": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    }
+  }
+}

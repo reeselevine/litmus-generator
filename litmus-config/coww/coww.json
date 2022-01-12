@@ -1,0 +1,31 @@
+{
+  "testName": "coww",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq": {
+      "type": "memory",
+      "id": "x",
+      "value": 2
+    },
+    "weak": {
+      "type": "memory",
+      "id": "x",
+      "value": 1
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+    "testName": "barrier-load-store-storage-workgroup",
+    "sameWorkgroup": true,
+    "threads": [
+        {
+            "actions": [
+                {
+                    "action": "read",
+                    "memoryLocation": "x",
+                    "variable": "r0"
+                },
+                {
+                    "action": "barrier"
+                }
+            ]
+        },
+        {
+            "actions": [
+                {
+                    "action": "write",
+                    "memoryLocation": "x",
+                    "value": 1
+                }
+            ]
+        }
+    ],
+    "behaviors": {
+        "seq": {
+            "type": "variable",
+            "id": "r0",
+            "value": 0
+        },
+        "weak": {
+            "type": "variable",
+            "id": "r0",
+            "value": 1
+        }
+    }
+}

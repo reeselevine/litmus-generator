@@ -20,7 +20,7 @@ def generate_and_run(test_config, parameter_config, check_output):
     output = run(test_config['testName'], check_output)
     return output
 
-def generate(test_config, parameter_config, backend):
+def generate(test_config, parameter_config, backend, result_agg=False):
     print("Generating {} litmus test for backend {}".format(test_config['testName'], backend))
     if backend == "vulkan":
         litmus_test = vulkanlitmusgenerator.VulkanLitmusTest(test_config)
@@ -29,7 +29,10 @@ def generate(test_config, parameter_config, backend):
         vulkan_setup.generate()
     elif backend == "wgsl":
         litmus_test = wgsllitmusgenerator.WgslLitmusTest(test_config)
-        litmus_test.generate()
+        if result_agg:
+            litmus_test.generate_results_aggregator()
+        else:
+            litmus_test.generate()
 
 def run(test_name, check_output):
     subprocess.run([env.get("cppCompiler"), "-I{}".format(env.get("vulkanHeaders")), "-I{}".format(env.get("easyvkHeader")), "-std=gnu++14", "-o", "target/{}".format(test_name), "target/{}.cpp".format(test_name), "-leasyvk", "-lvulkan"])
@@ -104,6 +107,7 @@ def parse_args():
     parser.add_argument("--outputfile", help="Output file to store results when running tests")
     parser.add_argument("--tune", action="store_true", help="Tune parameter config, should only be used when generating and running a test")
     parser.add_argument("--backend", help="Backend to use. Only valid when generating (not running) a litmus test. Valid options are vulkan and wgsl")
+    parser.add_argument("--result_agg", action="store_true", help="Generate results aggregation shader for specified test")
     return parser.parse_args()
 
 def main():
@@ -118,7 +122,7 @@ def main():
             backend = args.backend
         else:
             backend = "vulkan"
-        generate(test_config, parameter_config, backend)
+        generate(test_config, parameter_config, backend, args.result_agg)
     elif args.generate_and_run:
         test_config, parameter_config = load_config(args, args.test_name)
         if args.tune:

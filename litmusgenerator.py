@@ -1,182 +1,29 @@
-import os
+import json
+import argparse
+import wgsllitmustest
+import vulkanlitmustest
 
-class LitmusTest:
+def load_config(test_config):
+    with open(test_config, "r") as test_config_file:
+        test_config = json.loads(test_config_file.read())
+        return test_config
 
-    DEFAULT_LOCAL_ID = 0
-    DEFAULT_MEM_ORDER = "relaxed"
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("test_config", help="Path to the test configuration")
+    parser.add_argument("--backend", required=True, help="Backend to use. Valid options are opencl, vulkan, and wgsl")
+    parser.add_argument("--gen_result_shader", action="store_true", help="If specified, also generates results aggregation shader for specified test.")
+    args = parser.parse_args()
+    test_config = load_config(args.test_config)
+    if args.backend == "vulkan":
+      test = vulkanlitmustest.VulkanLitmusTest(test_config)
+    elif args.backend == "wgsl":
+      test = wgsllitmustest.WgslLitmusTest(test_config)
+    print("Generating {} litmus test for backend {}".format(test_config['testName'], args.backend))
+    test.generate()
+    if args.gen_result_shader:
+      print("Generating {} litmus test result aggregation for backend {}".format(test_config['testName'], args.backend))
+      test.generate_results_aggregator()
 
-    class PostCondition:
-
-        def __init__(self, output_type, identifier, value):
-            self.output_type = output_type
-            self.identifier = identifier
-            self.value = value
-
-    class Instruction:
-        pass
-
-    class ReadInstruction(Instruction):
-
-        def __init__(self, mem_loc, variable, mem_order, use_rmw):
-            self.mem_loc = mem_loc
-            self.variable = variable
-            self.mem_order = mem_order
-            self.use_rmw = use_rmw
-
-    class WriteInstruction(Instruction):
-
-        def __init__(self, mem_loc, value, mem_order, use_rmw):
-            self.mem_loc = mem_loc
-            self.value = value
-            self.mem_order = mem_order
-            self.use_rmw = use_rmw
-
-    class MemoryFence(Instruction):
-
-        def __init__(self, mem_order):
-            self.mem_order = mem_order
-
-    class Barrier(Instruction):
-    
-        def __init__(self, storage_type):
-            self.storage_type = storage_type
-
-    class Thread:
-        def __init__(self, workgroup, local_id, instructions, has_barrier):
-            self.workgroup = workgroup
-            self.local_id = local_id
-            self.instructions = instructions
-            self.has_barrier = has_barrier
-
-    def __init__(self, test_config):
-        self.test_config = test_config
-        self.memory_locations = {}
-        self.variables = {}
-        self.threads = []
-        self.post_conditions = []
-        self.test_name = test_config['testName']
-        self.initialize_threads()
-        self.initialize_post_conditions()
-
-    # Code below this line initializes settings
-
-    def initialize_threads(self):
-        mem_loc = 0
-        variable_output = 0
-        for thread in self.test_config['threads']:
-            has_barrier = False
-            instructions = []
-            for instruction in thread['actions']:
-                use_rmw = False
-                if 'memoryLocation' in instruction and instruction['memoryLocation'] not in self.memory_locations:
-                    self.memory_locations[instruction['memoryLocation']] = mem_loc
-                    mem_loc += 1
-                if 'memoryOrder' in instruction:
-                    mem_order = instruction['memoryOrder']
-                else:
-                    mem_order = self.DEFAULT_MEM_ORDER
-                if 'useRMW' in instruction:
-                    use_rmw = instruction['useRMW']
-                if instruction['action'] == "read":
-                    if instruction['variable'] not in self.variables:
-                        self.variables[instruction['variable']] = variable_output
-                        variable_output += 1
-                    instructions.append(self.ReadInstruction(instruction['memoryLocation'], instruction['variable'], mem_order, use_rmw))
-                if instruction['action'] == "write":
-                    instructions.append(self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw))
-                if instruction['action'] == "fence":
-                    instructions.append(self.MemoryFence(mem_order))
-                if instruction['action'] == "barrier":
-                    instructions.append(self.Barrier(instruction['storageType']))
-                    has_barrier = True
-            if 'localId' in thread:
-                local_id = thread['localId']
-            else:
-                local_id = self.DEFAULT_LOCAL_ID
-            self.threads.append(self.Thread(thread['workgroup'], local_id, instructions, has_barrier))
-
-    def initialize_post_conditions(self):
-        for post_condition in self.test_config['postConditions']:
-            self.post_conditions.append(self.PostCondition(post_condition['type'], post_condition['id'], post_condition['value']))
-
-    def generate(self):
-        body_statements = []
-        first_thread = True
-        variable_init = []
-        for variable, mem_loc in self.memory_locations.items():
-            body_statements.append(self.generate_mem_loc(variable, mem_loc))
-        for thread in self.threads:
-            variables = set()
-            thread_statements = self.generate_thread_header(thread.workgroup, thread.local_id, thread.has_barrier)
-            for instr in thread.instructions:
-                if isinstance(instr, self.ReadInstruction):
-                    variables.add(instr.variable)
-                thread_statements += self.backend_repr(instr, thread.workgroup, thread.local_id, thread.has_barrier)
-            for variable in variables:
-                thread_statements.append(self.results_repr(variable))
-            thread_statements = ["    {}".format(statement) for statement in thread_statements]
-            body_statements = body_statements + ["  {}".format(self.thread_filter(first_thread, thread.workgroup, thread.local_id, thread.has_barrier))] + thread_statements
-            first_thread = False
-        body_statements = body_statements + ["  \n".join(self.generate_stress_call())]
-        shader = "\n".join([self.generate_shader_def()] + body_statements + ["}\n"])
-        meta_info = self.generate_meta()
-        spin_func = self.generate_spin()
-        stress_func = self.generate_stress()
-        shader = "\n\n".join([meta_info, spin_func, stress_func, shader])
-        filename = "target/" + self.test_name + self.file_ext()
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, "w") as output_file:
-            output_file.write(shader)
-    
-    def file_ext(self):
-        pass
-
-    def generate_mem_loc(self, variable, mem_loc):
-        pass
-
-    def generate_thread_header(self, workgroup, local_id, has_barrier):
-        pass
-
-    def backend_repr(self, instr, workgroup, local_id, has_barrier):
-        if isinstance(instr, self.ReadInstruction):
-            return self.read_repr(instr, workgroup, local_id, has_barrier)
-        elif isinstance(instr, self.WriteInstruction):
-            return self.write_repr(instr, workgroup, local_id, has_barrier)
-        elif isinstance(instr, self.MemoryFence):
-            return self.fence_repr(instr)
-        elif isinstance(instr, self.Barrier):
-            return self.barrier_repr(instr)
-
-    def read_repr(self, instr, workgroup, local_id, has_barrier):
-        pass
-
-    def write_repr(self, instr, workgroup, local_id, has_barrier):
-        pass
-
-    def fence_repr(self, instr):
-        pass
-
-    def barrier_repr(self, instr):
-        pass
-
-    def results_repr(self, variable):
-       pass 
-
-    def thread_filter(self, first_thread, workgroup, thread, has_barrier):
-        pass
-
-    def generate_stress_call(self):
-        pass
-
-    def generate_shader_def(self):
-        pass
-
-    def generate_meta(self):
-        pass
-
-    def generate_stress(self):
-        pass
-
-    def generate_spin(self):
-        pass
-
+if __name__ == "__main__":
+    main()
