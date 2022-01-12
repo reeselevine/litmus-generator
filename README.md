@@ -10,10 +10,10 @@ Along with the actual test shader, the test generator can optionally generate a 
 ### WebGPU
 WebGPU's shading language is called WGSL. This tool supports WGSL shader generation out of the box, with no additional dependencies. To generate a WGSL shader, run `python3 litmusgenerator.py --backend wgsl <path-to-config-file>`.
 
-### OpenCL
+### OpenCL (WIP)
 OpenCL kernels are supported with no additional dependencies. To generate an OpenCL shader, run `python3 litmusgenerator.py --backend opencl <path-to-config-file>`.
 
-### Vulkan
+### Vulkan (WIP)
 Vulkan's shading language is called SPIR-V. Since SPIR-V is an intermediate representation, this tool does not generate SPIR-V directly. Instead, the tool first generates an OpenCL kernel and uses [clspv](https://github.com/google/clspv) to compile to SPIR-V. Therefore, for Vulkan test generation to work correctly clspv must be available as an executable on your system. To generate a SPIR-V shader, run `python3 litmusgenerator.py --backend vulkan <path-to-config-file>`.
 
 ## Running a Test
