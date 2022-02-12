@@ -59,7 +59,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
         suffix = []
         if len(self.threads) > 1:
             if self.same_workgroup:
-                suffix = ["let id_1 = {}".format(new_local_id)]
+                suffix = ["let id_1 = {};".format(new_local_id)]
             else:
                 suffix = [
                     "let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);",
@@ -96,7 +96,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
         ]
 
     def generate_test_result_type(self):
-        statements = ["[[block]] struct TestResults {"]
+        statements = ["struct TestResults {"]
         for behavior in self.behaviors:
             statements.append("  {}: atomic<u32>;".format(behavior.key))
         statements.append("};")
@@ -104,31 +104,31 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_stress_params_type(self):
         return [
-            "[[block]] struct StressParamsMemory {",
-            "  [[size(16)]] do_barrier: u32;",
-            "  [[size(16)]] mem_stress: u32;",
-            "  [[size(16)]] mem_stress_iterations: u32;",
-            "  [[size(16)]] mem_stress_pattern: u32;",
-            "  [[size(16)]] pre_stress: u32;",
-            "  [[size(16)]] pre_stress_iterations: u32;",
-            "  [[size(16)]] pre_stress_pattern: u32;",
-            "  [[size(16)]] permute_first: u32;",
-            "  [[size(16)]] permute_second: u32;",
-            "  [[size(16)]] testing_workgroups: u32;",
-            "  [[size(16)]] mem_stride: u32;",
-            "  [[size(16)]] location_offset: u32;",
+            "struct StressParamsMemory {",
+            "  @size(16) do_barrier: u32;",
+            "  @size(16) mem_stress: u32;",
+            "  @size(16) mem_stress_iterations: u32;",
+            "  @size(16) mem_stress_pattern: u32;",
+            "  @size(16) pre_stress: u32;",
+            "  @size(16) pre_stress_iterations: u32;",
+            "  @size(16) pre_stress_pattern: u32;",
+            "  @size(16) permute_first: u32;",
+            "  @size(16) permute_second: u32;",
+            "  @size(16) testing_workgroups: u32;",
+            "  @size(16) mem_stride: u32;",
+            "  @size(16) location_offset: u32;",
             "};"
         ]
 
     def generate_common_types(self):
-        atomic_type = "\n".join(["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
+        atomic_type = "\n".join(["struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
         read_result_type = "\n".join(self.generate_read_result_type())
-        read_results_type = "\n".join(["[[block]] struct ReadResults {", "  value: array<ReadResult>;", "};"])
+        read_results_type = "\n".join(["struct ReadResults {", "  value: array<ReadResult>;", "};"])
         stress_params_type = "\n".join(self.generate_stress_params_type())
         return [atomic_type, read_result_type, read_results_type, stress_params_type]
 
     def generate_types(self):
-        normal_type = "\n".join(["[[block]] struct Memory {", "  value: array<u32>;", "};"])
+        normal_type = "\n".join(["struct Memory {", "  value: array<u32>;", "};"])
         return "\n\n".join([normal_type] + self.generate_common_types())
 
     def generate_result_types(self):
@@ -137,13 +137,13 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_bindings(self):
         bindings = [
-            "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> results : ReadResults;",
-            "[[group(0), binding(2)]] var<storage, read_write> shuffled_workgroups : Memory;",
-            "[[group(0), binding(3)]] var<storage, read_write> barrier : AtomicMemory;",
-            "[[group(0), binding(4)]] var<storage, read_write> scratchpad : Memory;",
-            "[[group(0), binding(5)]] var<storage, read_write> scratch_locations : Memory;",
-            "[[group(0), binding(6)]] var<uniform> stress_params : StressParamsMemory;"
+            "@group(0) @binding(0) var<storage, read_write> test_locations : AtomicMemory;",
+            "@group(0) @binding(1) var<storage, read_write> results : ReadResults;",
+            "@group(0) @binding(2) var<storage, read_write> shuffled_workgroups : Memory;",
+            "@group(0) @binding(3) var<storage, read_write> barrier : AtomicMemory;",
+            "@group(0) @binding(4) var<storage, read_write> scratchpad : Memory;",
+            "@group(0) @binding(5) var<storage, read_write> scratch_locations : Memory;",
+            "@group(0) @binding(6) var<uniform> stress_params : StressParamsMemory;"
         ]
         if self.workgroup_memory:
             bindings += ["", "var<workgroup> wg_test_locations: array<atomic<u32>, 3584>;"]
@@ -151,10 +151,10 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_result_bindings(self):
         return "\n".join([
-            "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> read_results : ReadResults;",
-            "[[group(0), binding(2)]] var<storage, read_write> test_results : TestResults;",
-            "[[group(0), binding(3)]] var<uniform> stress_params : StressParamsMemory;"
+            "@group(0) @binding(0) var<storage, read_write> test_locations : AtomicMemory;",
+            "@group(0) @binding(1) var<storage, read_write> read_results : ReadResults;",
+            "@group(0) @binding(2) var<storage, read_write> test_results : TestResults;",
+            "@group(0) @binding(3) var<uniform> stress_params : StressParamsMemory;"
         ])
 
     def generate_helper_fns(self):
@@ -253,7 +253,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_stress_call(self):
         return [
-            "  } elseif (stress_params.mem_stress == 1u) {",
+            "  } else if (stress_params.mem_stress == 1u) {",
             "    do_stress(stress_params.mem_stress_iterations, stress_params.mem_stress_pattern, shuffled_workgroup);",
             "  }"
         ]
@@ -261,17 +261,17 @@ class WgslLitmusTest(litmustest.LitmusTest):
     def generate_common_shader_def(self):
       return [
           "let workgroupXSize = 256;",
-          "[[stage(compute), workgroup_size(workgroupXSize)]] fn main(",
-          "  [[builtin(local_invocation_id)]] local_invocation_id : vec3<u32>,",
-          "  [[builtin(workgroup_id)]] workgroup_id : vec3<u32>) {"
+          "@stage(compute) @workgroup_size(workgroupXSize) fn main(",
+          "  @builtin(local_invocation_id) local_invocation_id : vec3<u32>,",
+          "  @builtin(workgroup_id) workgroup_id : vec3<u32>) {"
       ]
 
     def generate_shader_def(self):
         return "\n".join([
             "let workgroupXSize = 256;",
-            "[[stage(compute), workgroup_size(workgroupXSize)]] fn main(",
-            "  [[builtin(local_invocation_id)]] local_invocation_id : vec3<u32>,",
-            "  [[builtin(workgroup_id)]] workgroup_id : vec3<u32>) {",
+            "@stage(compute) @workgroup_size(workgroupXSize) fn main(",
+            "  @builtin(local_invocation_id) local_invocation_id : vec3<u32>,",
+            "  @builtin(workgroup_id) workgroup_id : vec3<u32>) {",
             "  let shuffled_workgroup = shuffled_workgroups.value[workgroup_id[0]];",
             "  if (shuffled_workgroup < stress_params.testing_workgroups) {"
         ])
@@ -360,7 +360,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
             if first_behavior:
                 template = "if ({}) {{"
             else:
-                template = "}} elseif ({}) {{"
+                template = "}} else if ({}) {{"
             statements.append(template.format(condition))
             statements.append("  atomicAdd(&test_results.{}, 1u);".format(behavior.key))
             first_behavior = False
