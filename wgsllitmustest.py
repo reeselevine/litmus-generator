@@ -38,7 +38,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
     def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup", use_local_id=False):
         shift_mem_loc = ""
         if should_shift:
-            shift_mem_loc = "{} * u32(workgroupXSize) + ".format(workgroup_id)
+            shift_mem_loc = "{} * workgroupXSize + ".format(workgroup_id)
         if offset == 0:
             base = "{}id_{}".format(shift_mem_loc, i);
             offset_template = ""
@@ -55,7 +55,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
         return "let {}_{} = ({}) * stress_params.mem_stride * 2u{};".format(mem_loc, i, base, offset_template)
 
     def generate_threads_header(self, test_mem_locs):
-        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize))"
+        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize)"
         suffix = []
         if len(self.threads) > 1:
             if self.same_workgroup:
@@ -63,20 +63,20 @@ class WgslLitmusTest(litmustest.LitmusTest):
             else:
                 suffix = [
                     "let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);",
-                    "let id_1 = new_workgroup * u32(workgroupXSize) + {};".format(new_local_id)
+                    "let id_1 = new_workgroup * workgroupXSize + {};".format(new_local_id)
                 ]
         if self.same_workgroup:
             prefix = [
-                "let total_ids = u32(workgroupXSize);",
+                "let total_ids = workgroupXSize;",
                 "let id_0 = local_invocation_id[0];"
             ]
-            spin = "  spin(u32(workgroupXSize));"
+            spin = "  spin(workgroupXSize);"
         else:
             prefix = [
-                "let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;",
-                "let id_0 = shuffled_workgroup * u32(workgroupXSize) + local_invocation_id[0];"
+                "let total_ids = workgroupXSize * stress_params.testing_workgroups;",
+                "let id_0 = shuffled_workgroup * workgroupXSize + local_invocation_id[0];"
             ]
-            spin = "  spin(u32(workgroupXSize) * stress_params.testing_workgroups);"
+            spin = "  spin(workgroupXSize * stress_params.testing_workgroups);"
         statements = [
             "if (stress_params.pre_stress == 1u) {",
             "  do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);",
@@ -246,7 +246,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def results_repr(self, variable, i):
         if self.same_workgroup:
-            shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize) + "
+            shift_mem_loc = "shuffled_workgroup * workgroupXSize + "
         else:
             shift_mem_loc = ""
         return "atomicStore(&results.value[{}id_{}].{}, {});".format(shift_mem_loc, i, variable, variable)
@@ -260,7 +260,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_common_shader_def(self):
       return [
-          "let workgroupXSize = 256;",
+          "let workgroupXSize = 256u;",
           "@stage(compute) @workgroup_size(workgroupXSize) fn main(",
           "  @builtin(local_invocation_id) local_invocation_id : vec3<u32>,",
           "  @builtin(workgroup_id) workgroup_id : vec3<u32>) {"
@@ -278,12 +278,12 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_result_shader_def(self):
         if self.same_workgroup:
-            total_ids = "  let total_ids = u32(workgroupXSize);"
+            total_ids = "  let total_ids = workgroupXSize;"
         else:
-            total_ids = "  let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;"
+            total_ids = "  let total_ids = workgroupXSize * stress_params.testing_workgroups;"
         return "\n".join(self.generate_common_shader_def() + [
           total_ids,
-          "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
+          "  let id_0 = workgroup_id[0] * workgroupXSize + local_invocation_id[0];"
         ])
 
     def generate_post_condition(self, condition):
@@ -307,7 +307,7 @@ class WgslLitmusTest(litmustest.LitmusTest):
 
     def generate_post_condition_stores(self, condition, seen_ids):
         result = []
-        shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize)"
+        shift_mem_loc = "shuffled_workgroup * workgroupXSize"
         if isinstance(condition, self.PostConditionLeaf):
             if condition.identifier not in seen_ids:
                 seen_ids.add(condition.identifier)
