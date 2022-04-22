@@ -5,6 +5,8 @@ import argparse
 class LitmusTest:
 
     DEFAULT_MEM_ORDER = "relaxed"
+    DEFAULT_TEST_TYPE = "inter_workgroup"
+    DEFAULT_MEM_TYPE = "atomic_storage"
 
     class Behavior:
 
@@ -48,17 +50,9 @@ class LitmusTest:
             self.use_rmw = use_rmw
 
     class Fence(Instruction):
-        pass
-
-    class MemoryFence(Fence):
 
         def __init__(self, mem_order):
             self.mem_order = mem_order
-
-    class Barrier(Fence):
-
-        def __init__(self):
-            pass
 
     class Thread:
         def __init__(self, instructions):
@@ -68,17 +62,16 @@ class LitmusTest:
         self.test_config = test_config
         self.threads = []
         self.behaviors = []
-        self.variable_offsets = {}
         self.read_threads = {}
         self.test_name = test_config['testName']
-        if 'sameWorkgroup' in test_config:
-          self.same_workgroup = test_config['sameWorkgroup']
+        if 'testType' in test_config:
+          self.test_type = test_config['testType']
         else:
-          self.same_workgroup = False
-        if 'workgroupMemory' in test_config:
-            self.workgroup_memory = test_config['workgroupMemory']
+          self.test_type = self.DEFAULT_TEST_TYPE
+        if 'memoryType' in test_config:
+            self.memory_type = test_config['memoryType']
         else:
-            self.workgroup_memory = False
+            self.memory_type = self.DEFAULT_MEM_TYPE
         self.initialize_threads()
         self.initialize_behaviors()
 
@@ -88,7 +81,6 @@ class LitmusTest:
         i = 0
         for thread in self.test_config['threads']:
             instructions = []
-            j = 0
             for instruction in thread['actions']:
                 use_rmw = False
                 if 'memoryOrder' in instruction:
@@ -104,15 +96,10 @@ class LitmusTest:
                     parsed_instr = self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw)
                 elif instruction['action'] == "fence":
                     parsed_instr = self.MemoryFence(mem_order)
-                elif instruction['action'] == "barrier":
-                    parsed_instr = self.Barrier()
                 if parsed_instr != None:
                     if not isinstance(parsed_instr, self.Fence):
-                        if parsed_instr.mem_loc not in self.variable_offsets:
-                            self.variable_offsets[parsed_instr.mem_loc] = j
                         if isinstance(parsed_instr, self.ReadInstruction) and parsed_instr.variable not in self.read_threads:
                             self.read_threads[parsed_instr.variable] = i
-                        j += 1
                     instructions.append(parsed_instr)
             self.threads.append(self.Thread(instructions))
             i += 1
@@ -131,34 +118,43 @@ class LitmusTest:
             self.behaviors.append(self.Behavior(behavior, self.build_post_condition(self.test_config['behaviors'][behavior])))
 
     def generate(self):
-        body_statements = []
-        test_mem_locs = []
+        test_code = []
         test_instrs = []
         i = 0
-        results = []
         for thread in self.threads:
-            j = 0
             for instr in thread.instructions:
-                if not isinstance(instr, self.Fence):
-                    test_mem_locs.append(self.generate_mem_loc(instr.mem_loc, i, self.variable_offsets[instr.mem_loc], self.same_workgroup and not self.workgroup_memory))
-                    j += 1
-                    if isinstance(instr, self.ReadInstruction):
-                        results.append(self.results_repr(instr.variable, i))
                 test_instrs.append(self.backend_repr(instr, i))
             i += 1
-        body_statements += ["    " + "\n    ".join(self.generate_threads_header(test_mem_locs))]
-        body_statements += ["    " + "\n    ".join(test_instrs)]
-        body_statements += ["    " + "\n    ".join(self.generate_result_storage())]
-        body_statements += ["\n".join(self.generate_stress_call())]
-        shader = "\n".join([self.generate_shader_def()] + body_statements + ["}\n"])
-        meta_info = self.generate_meta()
-        spin_func = self.generate_spin()
-        stress_func = self.generate_stress()
-        shader = "\n\n".join([meta_info, spin_func, stress_func, shader])
+        test_code += ["    " + "\n    ".join(test_instrs)]
+        test_code += ["    " + "\n    ".join(self.generate_test_result_storage())]
+        shader = self.build_test_shader("\n".join(test_code))
         filename = "target/" + self.test_name + self.file_ext()
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, "w") as output_file:
             output_file.write(shader)
+
+    def generate_test_result_storage(self):
+        seen_ids = set()
+        statements = []
+        for behavior in self.behaviors:
+            statements += self.generate_post_condition_stores(behavior.post_condition, seen_ids)
+        return statements
+
+    def generate_post_condition_stores(self, condition, seen_ids):
+        result = []
+        if isinstance(condition, self.PostConditionLeaf):
+            if condition.identifier not in seen_ids:
+                seen_ids.add(condition.identifier)
+                if condition.output_type == "variable":
+                    variable = condition.identifier
+                    result.append(self.store_read_result_repr(variable, self.read_threads[variable]))
+                elif condition.output_type == "memory" and "workgroup" in self.memory_type:
+                    result.append(self.store_workgroup_mem_repr(condition.identifier))
+        elif isinstance(condition, self.PostConditionNode):
+            for cond in condition.conditions:
+                result += self.generate_post_condition_stores(cond, seen_ids)
+        return result
+
 
     def generate_results_aggregator(self):
         result_meta_info = self.generate_result_meta()
@@ -177,12 +173,6 @@ class LitmusTest:
     def file_ext(self):
         pass
 
-    def generate_mem_loc(self, variable, mem_loc):
-        pass
-
-    def generate_threads_header(self):
-        pass
-
     def backend_repr(self, instr, i):
         if isinstance(instr, self.ReadInstruction):
             return self.read_repr(instr, i)
@@ -190,8 +180,6 @@ class LitmusTest:
             return self.write_repr(instr, i)
         elif isinstance(instr, self.MemoryFence):
             return self.fence_repr(instr)
-        elif isinstance(instr, self.Barrier):
-            return self.barrier_repr(instr)
 
     def read_repr(self, instr, i):
         pass
@@ -200,36 +188,6 @@ class LitmusTest:
         pass
 
     def fence_repr(self, instr):
-        pass
-
-    def barrier_repr(self, instr):
-        pass
-
-    def results_repr(self, variable, i):
-      pass
-
-    def generate_stress_call(self):
-        pass
-
-    def generate_shader_def(self):
-        pass
-
-    def generate_result_shader_def(self):
-        pass
-
-    def generate_meta(self):
-        pass
-
-    def generate_result_meta(self):
-        pass
-
-    def generate_stress(self):
-        pass
-
-    def generate_spin(self):
-        pass
-
-    def generate_result_storage(self):
         pass
 
     def generate_result_shader_body(self):
