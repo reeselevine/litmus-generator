@@ -75,8 +75,6 @@ class LitmusTest:
         self.initialize_threads()
         self.initialize_behaviors()
 
-    # Code below this line initializes settings
-
     def initialize_threads(self):
         i = 0
         for thread in self.test_config['threads']:
@@ -114,6 +112,7 @@ class LitmusTest:
             return self.PostConditionLeaf(condition['type'], condition['id'], condition['value'])
 
     def initialize_behaviors(self):
+        self.num_behaviors = len(self.test_config['behaviors'])
         for behavior in self.test_config['behaviors']:
             self.behaviors.append(self.Behavior(behavior, self.build_post_condition(self.test_config['behaviors'][behavior])))
 
@@ -155,23 +154,38 @@ class LitmusTest:
                 result += self.generate_post_condition_stores(cond, seen_ids)
         return result
 
-
     def generate_results_aggregator(self):
-        result_meta_info = self.generate_result_meta()
-        header = self.generate_result_shader_def()
-        statements = ["  " + "\n  ".join(self.generate_result_shader_body())]
-        statements.append("}\n")
-        shader_fn = "\n".join([header] + statements)
-        result_shader = "\n\n".join([result_meta_info, shader_fn])
+        result_code = ["  " + "\n  ".join(self.generate_result_shader_body())]
+        shader = self.build_result_shader("\n".join(result_code))
         result_filename = "target/" + self.test_name + "-results" + self.file_ext()
         os.makedirs(os.path.dirname(result_filename), exist_ok=True)
         with open(result_filename, "w") as output_file:
-            output_file.write(result_shader)
+            output_file.write(shader)
 
+    def generate_post_condition(self, condition):
+        if isinstance(condition, self.PostConditionLeaf):
+            if condition.output_type == "variable":
+                return self.post_cond_var_repr(condition)
+            elif condition.output_type == "memory":
+                return self.post_cond_mem_repr(condition)
+        elif isinstance(condition, self.PostConditionNode):
+            if condition.operator == "and":
+                return self.post_cond_and_node_repr([self.generate_post_condition(cond) for cond in condition.conditions])
 
-
-    def file_ext(self):
-        pass
+    def generate_result_shader_body(self):
+        first_behavior = True
+        last_behavior = False
+        statements = []
+        seen_ids = set()
+        i = 0
+        for behavior in self.behaviors:
+            if i == len(self.behaviors) - 1:
+                last_behavior = True
+            condition = self.generate_post_condition(behavior.post_condition)
+            statements += self.generate_behavior_check(condition, behavior.key, first_behavior, last_behavior)
+            first_behavior = False
+            i += 1
+        return statements
 
     def backend_repr(self, instr, i):
         if isinstance(instr, self.ReadInstruction):
@@ -180,6 +194,15 @@ class LitmusTest:
             return self.write_repr(instr, i)
         elif isinstance(instr, self.MemoryFence):
             return self.fence_repr(instr)
+
+    def build_test_shader(self, test_code):
+        pass
+
+    def build_result_shader(self, result_code):
+        pass
+
+    def file_ext(self):
+        pass
 
     def read_repr(self, instr, i):
         pass
@@ -190,5 +213,20 @@ class LitmusTest:
     def fence_repr(self, instr):
         pass
 
-    def generate_result_shader_body(self):
+    def store_read_result_repr(self, variable, i):
+        pass
+
+    def store_workgroup_mem_repr(self, _id):
+        pass
+
+    def post_cond_var_repr(self, condition):
+        pass
+
+    def post_cond_mem_repr(self, condition):
+        pass
+
+    def post_cond_and_node_repr(self, conditions):
+        pass
+
+    def generate_behavior_check(self, cond, key, first_behavior, last_behavior):
         pass

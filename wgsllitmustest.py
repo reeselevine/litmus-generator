@@ -41,24 +41,24 @@ struct StressParamsMemory {
     # "seq1" means the second invocation's instructions are observed to have occurred before the first invocation's instructions.
     # "interleaved" means there was an observation of some interleaving of instructions between the two invocations.
     # "weak" means there was an observation of some ordering of instructions that is inconsistent with the WebGPU memory model.
-    four_behavior_test_result_struct = """
-struct TestResults {
+    four_behavior_test_result_struct = """struct TestResults {
   seq0: atomic<u32>;
   seq1: atomic<u32>;
   interleaved: atomic<u32>
   weak: atomic<u32>;
 };
+
 """
 
     # Defines the possible behaviors of a two instruction test. Used to test the behavior of non-atomic memory with barriers and
     # one-thread coherence tests.
     # "seq" means that the expected, sequential behavior occurred.
     # "weak" means that an unexpected, inconsistent behavior occurred.
-    two_behavior_test_result_struct = """
-struct TestResults {
+    two_behavior_test_result_struct = """struct TestResults {
   seq: atomic<u32>;
   weak: atomic<u32>;
 };
+
 """
 
     # Common bindings used in the test shader phase of a test.
@@ -79,8 +79,7 @@ struct TestResults {
 @group(0) @binding(0) var<storage, read_write> test_locations : AtomicMemory;
 @group(0) @binding(1) var<storage, read_write> read_results : ReadResults;
 @group(0) @binding(2) var<storage, read_write> test_results : TestResults;
-@group(0) @binding(3) var<uniform> stress_params : StressParamsMemory;
-"""
+@group(0) @binding(3) var<uniform> stress_params : StressParamsMemory;"""
 
     atomic_workgroup_memory = "var<workgroup> wg_test_locations: array<atomic<u32>, 3584>;"
 
@@ -214,23 +213,26 @@ let workgroupXSize = 256u;
 """
 
     result_shader_common_calculations = """
-    let id_0 = workgroup_id[0] * workgroupXSize + local_invocation_id[0];
-    let x_0 = id_0 * stress_params.mem_stride * 2u;
-    let mem_x_0 = atomicLoad(&test_locations.value[x_0]);
-    let r0 = atomicLoad(&read_results.value[id_0].r0);
-    let r1 = atomicLoad(&read_results.value[id_0].r1);"""
+  let id_0 = workgroup_id[0] * workgroupXSize + local_invocation_id[0];
+  let x_0 = id_0 * stress_params.mem_stride * 2u;
+  let mem_x_0 = atomicLoad(&test_locations.value[x_0]);
+  let r0 = atomicLoad(&read_results.value[id_0].r0);
+  let r1 = atomicLoad(&read_results.value[id_0].r1);"""
 
     inter_workgroup_result_shader_code = result_shader_common_calculations + """
-    let total_ids = workgroupXSize * stress_params.testing_workgroups;
-    let y_0 = permute_id(id_0, stress_params.permute_second, total_ids) * stress_params.mem_stride * 2u + stress_params.location_offset;
-    let mem_y_0 = atomicLoad(&test_locations.value[y_0]);"""
-
-    intra_workgroup_result_shader_code = result_shader_common_calculations + """
-    let total_ids = workgroupXSize;
-    let y_0 = (workgroup_id[0] * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+  let total_ids = workgroupXSize * stress_params.testing_workgroups;
+  let y_0 = permute_id(id_0, stress_params.permute_second, total_ids) * stress_params.mem_stride * 2u + stress_params.location_offset;
+  let mem_y_0 = atomicLoad(&test_locations.value[y_0]);
 """
 
-    result_shader_common_footer = "}"
+    intra_workgroup_result_shader_code = result_shader_common_calculations + """
+  let total_ids = workgroupXSize;
+  let y_0 = (workgroup_id[0] * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+"""
+
+    result_shader_common_footer = """
+}
+"""
 
     storage_memory_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
 
@@ -252,29 +254,25 @@ let workgroupXSize = 256u;
             mem_type_code = self.workgroup_memory_atomic_test_shader_code
         elif self.memory_type == "non_atomic_workgroup":
             mem_type_code = self.workgroup_memory_non_atomic_test_shader_code
-
         test_type_code = ""
         if self.test_type == "inter_workgroup":
             test_type_code = self.inter_workgroup_test_shader_code
         elif self.test_type == "intra_workgroup":
             test_type_code = self.intra_workgroup_test_shader_code
-
         return mem_type_code + test_type_code + test_code + self.test_shader_common_footer
 
-    def build_result_shader(self):
+    def build_result_shader(self, result_code):
         result_structure = ""
-        if self.result_type == "two_behavior":
-            result_structure = two_behavior_test_result_struct
-        elif self.result_type == "four_behavior":
-            result_structure = four_behavior_test_result_struct
-
+        if self.num_behaviors == 2:
+            result_structure = self.two_behavior_test_result_struct
+        elif self.num_behaviors == 4:
+            result_structure = self.four_behavior_test_result_struct
         test_type_code = ""
         if self.test_type == "inter_workgroup":
-            test_type_code = inter_workgroup_result_shader_code
+            test_type_code = self.inter_workgroup_result_shader_code
         elif self.test_type == "intra_workkgroup":
-            test_type_code = intra_workgroup_result_shader_code
-
-        return result_structure + result_shader_common_code + test_type_code + self.result_code + result_shader_common_footer
+            test_type_code = self.intra_workgroup_result_shader_code
+        return result_structure + self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
 
     def file_ext(self):
         return ".wgsl"
@@ -307,7 +305,6 @@ let workgroupXSize = 256u;
         else:
             return "storageBarrier();"
 
-
     def store_read_result_repr(self, variable, i):
         if self.test_type == "intra_workgroup":
             shift_mem_loc = "shuffled_workgroup * workgroupXSize + "
@@ -323,48 +320,23 @@ let workgroupXSize = 256u;
         mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
         return "atomicStore(&test_locations.value[{} * stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc)
 
+    def post_cond_var_repr(self, condition):
+        return "{} == {}u".format(condition.identifier, condition.value)
 
-    def generate_post_condition(self, condition):
-        if isinstance(condition, self.PostConditionLeaf):
-            template = ""
-            if condition.output_type == "variable":
-                template = "{} == {}u"
-            elif condition.output_type == "memory":
-                template = "mem_{}_0 == {}u"
-            return template.format(condition.identifier, condition.value)
-        elif isinstance(condition, self.PostConditionNode):
-            if condition.operator == "and":
-                return "(" + " && ".join([self.generate_post_condition(cond) for cond in condition.conditions]) + ")"
+    def post_cond_mem_repr(self, condition):
+        return "mem_{}_0 == {}u".format(condition.identifier, condition.value)
 
-    def generate_post_condition_loads(self, condition, seen_ids):
-        result = []
-        if isinstance(condition, self.PostConditionLeaf):
-            if condition.identifier not in seen_ids:
-                seen_ids.add(condition.identifier)
-                if condition.output_type == "variable":
-                    result.append("let {} = atomicLoad(&read_results.value[id_0].{});".format(condition.identifier, condition.identifier))
-                elif condition.output_type == "memory":
-                    var = "{}_0".format(condition.identifier)
-                    result.append("let mem_{} = atomicLoad(&test_locations.value[{}]);".format(var, var))
-        elif isinstance(condition, self.PostConditionNode):
-            for cond in condition.conditions:
-                result += self.generate_post_condition_loads(cond, seen_ids)
-        return result
+    def post_cond_and_node_repr(self, conditions):
+        return "(" + " && ".join(conditions) + ")"
 
-    def generate_result_shader_body(self):
-        first_behavior = True
+    def generate_behavior_check(self, cond, key, first_behavior, last_behavior):
         statements = []
-        seen_ids = set()
-        for behavior in self.behaviors:
-            statements += self.generate_post_condition_loads(behavior.post_condition, seen_ids)
-        for behavior in self.behaviors:
-            condition = self.generate_post_condition(behavior.post_condition)
-            if first_behavior:
-                template = "if ({}) {{"
-            else:
-                template = "}} else if ({}) {{"
-            statements.append(template.format(condition))
-            statements.append("  atomicAdd(&test_results.{}, 1u);".format(behavior.key))
-            first_behavior = False
-        statements.append("}")
+        if first_behavior:
+            template = "if ({}) {{"
+        else:
+            template = "}} else if ({}) {{"
+        statements.append(template.format(cond))
+        statements.append("  atomicAdd(&test_results.{}, 1u);".format(key))
+        if last_behavior:
+            statements.append("}")
         return statements
