@@ -4,35 +4,35 @@ class WgslLitmusTest(LitmusTest):
 
     # Defines common data structures used in memory model test shaders.
     shader_mem_structures = """struct Memory {
-  value: array<u32>;
+  value: array<u32>,
 };
 
 struct AtomicMemory {
-  value: array<atomic<u32>>;
+  value: array<atomic<u32>>,
 };
 
 struct ReadResult {
-  r0: atomic<u32>;
-  r1: atomic<u32>;
+  r0: atomic<u32>,
+  r1: atomic<u32>,
 };
 
 struct ReadResults {
-  value: array<ReadResult>;
+  value: array<ReadResult>,
 };
 
 struct StressParamsMemory {
-  do_barrier: u32;
-  mem_stress: u32;
-  mem_stress_iterations: u32;
-  mem_stress_pattern: u32;
-  pre_stress: u32;
-  pre_stress_iterations: u32;
-  pre_stress_pattern: u32;
-  permute_first: u32;
-  permute_second: u32;
-  testing_workgroups: u32;
-  mem_stride: u32;
-  location_offset: u32;
+  do_barrier: u32,
+  mem_stress: u32,
+  mem_stress_iterations: u32,
+  mem_stress_pattern: u32,
+  pre_stress: u32,
+  pre_stress_iterations: u32,
+  pre_stress_pattern: u32,
+  permute_first: u32,
+  permute_second: u32,
+  testing_workgroups: u32,
+  mem_stride: u32,
+  location_offset: u32,
 };
 """
 
@@ -42,10 +42,10 @@ struct StressParamsMemory {
     # "interleaved" means there was an observation of some interleaving of instructions between the two invocations.
     # "weak" means there was an observation of some ordering of instructions that is inconsistent with the WebGPU memory model.
     four_behavior_test_result_struct = """struct TestResults {
-  seq0: atomic<u32>;
-  seq1: atomic<u32>;
-  interleaved: atomic<u32>
-  weak: atomic<u32>;
+  seq0: atomic<u32>,
+  seq1: atomic<u32>,
+  interleaved: atomic<u32>,
+  weak: atomic<u32>,
 };
 
 """
@@ -55,8 +55,8 @@ struct StressParamsMemory {
     # "seq" means that the expected, sequential behavior occurred.
     # "weak" means that an unexpected, inconsistent behavior occurred.
     two_behavior_test_result_struct = """struct TestResults {
-  seq: atomic<u32>;
-  weak: atomic<u32>;
+  seq: atomic<u32>,
+  weak: atomic<u32>,
 };
 
 """
@@ -97,10 +97,6 @@ fn permute_id(id: u32, factor: u32, mask: u32) -> u32 {
 """
 
     test_shader_fns = """
-//Force the invocations in the workgroup to wait for each other, but without the general memory ordering
-// effects of a control barrier. The barrier spins until either all invocations have incremented the atomic
-// variable or 1024 loops have occurred. 1024 was chosen because it gives more time for invocations to enter
-// the barrier but does not overly reduce testing throughput.
 fn spin(limit: u32) {
   var i : u32 = 0u;
   var bar_val : u32 = atomicAdd(&barrier.value[0], 1u);
@@ -113,10 +109,6 @@ fn spin(limit: u32) {
   }
 }
 
-// Perform iterations of stress, depending on the specified pattern. Pattern 0 is store-store, pattern 1 is store-load,
-// pattern 2 is load-store, and pattern 3 is load-load. The extra if condition (if tmpX > 100000u), is used to avoid
-// the compiler optimizing out unused loads, where 100,000 is larger than the maximum number of stress iterations used
-// in any test.
 fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {
   let addr = scratch_locations.value[workgroup_id];
   switch(pattern) {
@@ -167,7 +159,6 @@ fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {
 """
 
     shader_entry_point = """
-// Change to pipeline overridable constant when possible.
 let workgroupXSize = 256u;
 @stage(compute) @workgroup_size(workgroupXSize) fn main(
   @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
@@ -270,7 +261,7 @@ let workgroupXSize = 256u;
         test_type_code = ""
         if self.test_type == "inter_workgroup":
             test_type_code = self.inter_workgroup_result_shader_code
-        elif self.test_type == "intra_workkgroup":
+        elif self.test_type == "intra_workgroup":
             test_type_code = self.intra_workgroup_result_shader_code
         return result_structure + self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
 

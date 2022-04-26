@@ -92,7 +92,7 @@ class LitmusTest:
                     parsed_instr = self.ReadInstruction(instruction['memoryLocation'], instruction['variable'], mem_order, use_rmw)
                 elif instruction['action'] == "write":
                     parsed_instr = self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw)
-                elif instruction['action'] == "fence":
+                elif instruction['action'] == "fence" or instruction['action'] == "barrier":
                     parsed_instr = self.MemoryFence(mem_order)
                 if parsed_instr != None:
                     if not isinstance(parsed_instr, self.Fence):
