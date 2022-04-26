@@ -184,7 +184,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
             result_template = ""
         else:
             result_template = " + 1"
-        return "atomic_store(&read_results[{}id_{}*2{}], {});".format(shift_mem_loc, i, result_template, variable)
+        return "atomic_store(&read_results[{}id_{} * 2{}], {});".format(shift_mem_loc, i, result_template, variable)
 
     def generate_stress_call(self):
         return [
@@ -235,7 +235,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
             if condition.output_type == "variable":
                 template = "{} == {}"
             elif condition.output_type == "memory":
-                template = "mem_{}_0 == {}u"
+                template = "mem_{}_0 == {}"
             return template.format(condition.identifier, condition.value)
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":
@@ -264,7 +264,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
                         result_template = ""
                     else:
                         result_template = " + 1"
-                    result.append("atomic_store(&read_results[{}id_{}*2{}], {});".format(shift, self.read_threads[variable], result_template, variable))
+                    result.append("atomic_store(&read_results[{}id_{} * 2{}], {});".format(shift, self.read_threads[variable], result_template, variable))
                 elif condition.output_type == "memory" and self.workgroup_memory:
                     mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
                     result.append("atomic_store_explicit(&test_locations[{} * stress_params[10] * 2 + {}], atomic_load_explicit(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
