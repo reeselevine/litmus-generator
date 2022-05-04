@@ -109,7 +109,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
         return "".join([self.generate_helper_fns()])
 
     def generate_result_meta(self):
-        return ""
+        return "".join([self.generate_helper_fns()]) 
 
     def generate_stress(self):
         body = ["static void do_stress(__global uint* scratchpad, __global uint* scratch_locations, uint iterations, uint pattern) {",
@@ -267,7 +267,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
                     result.append("atomic_store(&read_results[{}id_{} * 2{}], {});".format(shift, self.read_threads[variable], result_template, variable))
                 elif condition.output_type == "memory" and self.workgroup_memory:
                     mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
-                    result.append("atomic_store_explicit(&test_locations[{} * stress_params[10] * 2 + {}], atomic_load_explicit(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
+                    result.append("atomic_store(&test_locations[{} * stress_params[10] * 2 + {}], atomic_load(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 result += self.generate_post_condition_stores(cond, seen_ids)
@@ -293,7 +293,7 @@ class VulkanLitmusTest(litmustest.LitmusTest):
                             shift = True
                     result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], shift, "workgroup_id[0]", use_local_id))
                     var = "{}_0".format(condition.identifier)
-                    result.append("uint mem_{} = atomic_load(&test_locations.value[{}]);".format(var, var))
+                    result.append("uint mem_{} = atomic_load(&test_locations[{}]);".format(var, var))
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 result += self.generate_post_condition_loads(cond, seen_ids)
