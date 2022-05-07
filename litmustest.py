@@ -93,7 +93,7 @@ class LitmusTest:
                 elif instruction['action'] == "write":
                     parsed_instr = self.WriteInstruction(instruction['memoryLocation'], instruction['value'], mem_order, use_rmw)
                 elif instruction['action'] == "fence" or instruction['action'] == "barrier":
-                    parsed_instr = self.MemoryFence(mem_order)
+                    parsed_instr = self.Fence(mem_order)
                 if parsed_instr != None:
                     if not isinstance(parsed_instr, self.Fence):
                         if isinstance(parsed_instr, self.ReadInstruction) and parsed_instr.variable not in self.read_threads:
@@ -124,8 +124,7 @@ class LitmusTest:
             for instr in thread.instructions:
                 test_instrs.append(self.backend_repr(instr, i))
             i += 1
-        test_code += ["    " + "\n    ".join(test_instrs)]
-        test_code += ["    " + "\n    ".join(self.generate_test_result_storage())]
+        test_code += ["    " + "\n    ".join(test_instrs + self.generate_test_result_storage())]
         shader = self.build_test_shader("\n".join(test_code))
         filename = "target/" + self.test_name + self.file_ext()
         os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -135,12 +134,19 @@ class LitmusTest:
     def generate_test_result_storage(self):
         seen_ids = set()
         statements = []
+        needs_mem = False
         for behavior in self.behaviors:
-            statements += self.generate_post_condition_stores(behavior.post_condition, seen_ids)
+            (_needs_mem, _statements) = self.generate_post_condition_stores(behavior.post_condition, seen_ids)
+            statements += _statements
+            if not needs_mem:
+                needs_mem = _needs_mem
+        if needs_mem:
+            statements = [self.fence_repr(self.Fence("sc"))] + statements
         return statements
 
     def generate_post_condition_stores(self, condition, seen_ids):
         result = []
+        needs_mem = False
         if isinstance(condition, self.PostConditionLeaf):
             if condition.identifier not in seen_ids:
                 seen_ids.add(condition.identifier)
@@ -149,10 +155,14 @@ class LitmusTest:
                     result.append(self.store_read_result_repr(variable, self.read_threads[variable]))
                 elif condition.output_type == "memory" and "workgroup" in self.memory_type:
                     result.append(self.store_workgroup_mem_repr(condition.identifier))
+                    needs_mem = True
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
-                result += self.generate_post_condition_stores(cond, seen_ids)
-        return result
+                (_needs_mem, _result) = self.generate_post_condition_stores(cond, seen_ids)
+                result += _result
+                if not needs_mem:
+                    needs_mem = _needs_mem
+        return (needs_mem, result)
 
     def generate_results_aggregator(self):
         result_code = ["  " + "\n  ".join(self.generate_result_shader_body())]
@@ -192,7 +202,7 @@ class LitmusTest:
             return self.read_repr(instr, i)
         elif isinstance(instr, self.WriteInstruction):
             return self.write_repr(instr, i)
-        elif isinstance(instr, self.MemoryFence):
+        elif isinstance(instr, self.Fence):
             return self.fence_repr(instr)
 
     def build_test_shader(self, test_code):

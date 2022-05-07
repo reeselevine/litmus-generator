@@ -1,6 +1,6 @@
 {
   "testName": "load-buffer-storage-workgroup-barrier",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [

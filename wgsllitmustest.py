@@ -169,19 +169,29 @@ let workgroupXSize = 256u;
   if (shuffled_workgroup < stress_params.testing_workgroups) {"""
 
     test_shader_common_calculations = """
-    let x_0 = id_0 * stress_params.mem_stride * 2u;
-    let y_0 = permute_id(id_0, stress_params.permute_second, total_ids) * stress_params.mem_stride * 2u + stress_params.location_offset;
-    let x_1 = id_1 * stress_params.mem_stride * 2u;
-    let y_1 = permute_id(id_1, stress_params.permute_second, total_ids) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    let x_0 = ({}id_0) * stress_params.mem_stride * 2u;
+    let y_0 = ({}permute_id(id_0, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    let x_1 = ({}id_1) * stress_params.mem_stride * 2u;
+    let y_1 = ({}permute_id(id_1, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    if (stress_params.pre_stress == 1u) {{
+      do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);
+    }}"""
+
+    storage_intra_workgroup_calculations = """
+    let x_0 = (shuffled_workgroup * workgroupXSize + id_0) * stress_params.mem_stride * 2u;
+    let y_0 = (shuffled_workgroup * workgroupXSize + permute_id(id_0, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    let x_1 = (shuffled_workgroup * workgroupXSize + id_1) * stress_params.mem_stride * 2u;
+    let y_1 = (shuffled_workgroup * workgroupXSize + permute_id(id_1, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
     if (stress_params.pre_stress == 1u) {
       do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);
     }"""
+
 
     inter_workgroup_test_shader_code = """
     let total_ids = workgroupXSize * stress_params.testing_workgroups;
     let id_0 = shuffled_workgroup * workgroupXSize + local_invocation_id[0];
     let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);
-    let id_1 = new_workgroup * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize);""" + test_shader_common_calculations + """
+    let id_1 = new_workgroup * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize);""" + test_shader_common_calculations.format("", "", "", "") + """
     if (stress_params.do_barrier == 1u) {
       spin(workgroupXSize * stress_params.testing_workgroups);
     }
@@ -191,9 +201,9 @@ let workgroupXSize = 256u;
     let total_ids = workgroupXSize;
     let id_0 = local_invocation_id[0];
     let id_1 = permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize);""" + test_shader_common_calculations + """
-    if (stress_params.do_barrier == 1u) {
+    if (stress_params.do_barrier == 1u) {{
       spin(workgroupXSize);
-    }
+    }}
 """
 
     test_shader_common_footer = """
@@ -237,8 +247,10 @@ let workgroupXSize = 256u;
 
     def build_test_shader(self, test_code):
         mem_type_code = ""
+        storage_shift = ""
         if self.memory_type == "atomic_storage":
             mem_type_code = self.storage_memory_atomic_test_shader_code
+            storage_shift = "shuffled_workgroup * workgroupXSize + "
         elif self.memory_type == "non_atomic_storage":
             mem_type_code = self.storage_memory_non_atomic_test_shader_code
         elif self.memory_type == "atomic_workgroup":
@@ -249,7 +261,7 @@ let workgroupXSize = 256u;
         if self.test_type == "inter_workgroup":
             test_type_code = self.inter_workgroup_test_shader_code
         elif self.test_type == "intra_workgroup":
-            test_type_code = self.intra_workgroup_test_shader_code
+            test_type_code = self.intra_workgroup_test_shader_code.format(storage_shift, storage_shift, storage_shift, storage_shift)
         return mem_type_code + test_type_code + test_code + self.test_shader_common_footer
 
     def build_result_shader(self, result_code):
@@ -285,7 +297,7 @@ let workgroupXSize = 256u;
         else:
             loc = "test_locations.value"
         if instr.use_rmw:
-            template = "let unused = atomicExchange(&{}[{}_{}], {}u);"
+            template = "atomicExchange(&{}[{}_{}], {}u);"
         else:
             template = "atomicStore(&{}[{}_{}], {}u);"
         return template.format(loc, instr.mem_loc, i, instr.value)
@@ -305,11 +317,11 @@ let workgroupXSize = 256u;
 
     def store_workgroup_mem_repr(self, _id):
         if self.test_type == "intra_workgroup":
-            shift_mem_loc = "shuffled_workgroup * workgroupXSize + "
+            shift_mem_loc = "shuffled_workgroup * workgroupXSize * "
         else:
             shift_mem_loc = ""
-        mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
-        return "atomicStore(&test_locations.value[{} * stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc)
+        mem_loc = "{}_{}".format(_id, len(self.threads) - 1)
+        return "atomicStore(&test_locations.value[{}stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc)
 
     def post_cond_var_repr(self, condition):
         return "{} == {}u".format(condition.identifier, condition.value)
