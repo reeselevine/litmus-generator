@@ -1,6 +1,6 @@
 {
   "testName": "corw2-storage-workgroup",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [

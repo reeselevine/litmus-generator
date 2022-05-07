@@ -1,6 +1,6 @@
 {
   "testName": "message-passing-storage-workgroup",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [
