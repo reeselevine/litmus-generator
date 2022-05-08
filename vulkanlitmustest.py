@@ -116,7 +116,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
     if (stress_params[0]) {{
       spin(barrier, get_local_size(0));
     }}
-    """
+"""
 
     test_shader_common_footer = """
   } else if (stress_params[1]) {
@@ -138,7 +138,11 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
   uint mem_y_0 = atomic_load(&test_locations[y_0]);
 """
 
-    intra_workgroup_result_shader_code = """TODO"""
+    intra_workgroup_result_shader_code = result_shader_common_calculations + """
+  uint total_ids = get_local_size(0);
+  uint y_0 = (workgroup_id[0] * get_local_size(0) + permute_id(get_local_id(0), stress_params[8], total_ids)) * stress_params[10] * 2 + stress_params[11];
+  uint mem_y_0 = atomic_load(&test_locations[y_0]);
+"""
 
     result_shader_common_footer = """
 }
@@ -195,7 +199,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
         else:
             loc = "test_locations"
         if instr.use_rmw:
-            template = "uint unused = atomic_exchange_explicit(&{}[{}_{}], {}, {});"
+            template = "atomic_exchange_explicit(&{}[{}_{}], {}, {});"
         else:
             template = "atomic_store_explicit(&{}[{}_{}], {}, {});"
         return template.format(loc, instr.mem_loc, i, instr.value, self.openCL_mem_order[instr.mem_order])
@@ -222,8 +226,8 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
             shift_mem_loc = "shuffled_workgroup * get_local_size(0) + "
         else:
             shift_mem_loc = ""
-        result.append("atomic_store(&test_locations[{} * stress_params[10] * 2 + {}], atomic_load(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
-
+        mem_loc = "{}_{}".format(_id, len(self.threads) - 1)
+        return "atomic_store(&test_locations[{}stress_params[10] * 2 + {}], atomic_load(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc)
 
     def post_cond_var_repr(self, condition):
         return "{} == {}".format(condition.identifier, condition.value)
