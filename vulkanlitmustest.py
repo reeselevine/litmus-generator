@@ -148,6 +148,32 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
 
     result_shader_common_code = memory_locaion_fns + shader_fn_call + result_shader_args
 
+    def build_test_shader(self, test_code):
+        mem_type_code = ""
+        storage_shift = ""
+        if self.memory_type == "atomic_storage":
+            mem_type_code = self.global_memory_atomic_test_shader_code
+            storage_shift = "shuffled_workgroup * get_local_size(0) + "
+        elif self.memory_type == "non_atomic_storage":
+            mem_type_code = self.global_memory_non_atomic_test_shader_code
+        elif self.memory_type == "atomic_workgroup":
+            mem_type_code = self.local_memory_atomic_test_shader_code
+        elif self.memory_type == "non_atomic_workgroup":
+            mem_type_code = self.local_memory_non_atomic_test_shader_code
+        test_type_code = ""
+        if self.test_type == "inter_workgroup":
+            test_type_code = self.inter_workgroup_test_shader_code
+        elif self.test_type == "intra_workgroup":
+            test_type_code = self.intra_workgroup_test_shader_code.format(storage_shift, storage_shift, storage_shift, storage_shift)
+        return mem_type_code + test_type_code + test_code + self.test_shader_common_footer
+
+    def build_result_shader(self, result_code):
+        test_type_code = ""
+        if self.test_type == "inter_workgroup":
+            test_type_code = self.inter_workgroup_result_shader_code
+        elif self.test_type == "intra_workgroup":
+            test_type_code = self.intra_workgroup_result_shader_code
+        return self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
 
     opencl_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
     # returns the first access in the stress pattern
@@ -183,112 +209,8 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
 
     # Code below this line generates the actual opencl kernel
 
-    def file_ext(self):
-        return ".cl"
-
-    def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup", use_local_id=False):
-        shift_mem_loc = ""
-        if should_shift:
-            shift_mem_loc = "{} * get_local_size(0) + ".format(workgroup_id)
-        if offset == 0:
-            base = "{}id_{}".format(shift_mem_loc, i)
-            offset_template = ""
-        else:
-            if use_local_id:
-                to_permute = "get_local_id(0)"
-            else:
-                to_permute = "id_{}".format(i)
-            base = "{}permute_id({}, stress_params[8], total_ids)".format(shift_mem_loc, to_permute)
-            if offset == 1:
-                offset_template = " + stress_params[11]"
-            else:
-                offset_template = " + {} * stress_params[11]".format(offset)
-        return "uint {}_{} = ({}) * stress_params[10] * 2{};".format(mem_loc, i, base, offset_template)
-
-    def generate_threads_header(self, test_mem_locs):
-        new_local_id = "permute_id(get_local_id(0), stress_params[7], get_local_size(0))"
-        suffix = []
-        if len(self.threads) > 1:
-            if self.same_workgroup:
-                suffix = ["uint id_1 = {};".format(new_local_id)]
-            else:
-                suffix = [
-                    "uint new_workgroup = stripe_workgroup(shuffled_workgroup, get_local_id(0), stress_params[9]);",
-                    "uint id_1 = new_workgroup * get_local_size(0) + {};".format(new_local_id)
-                ]
-        if self.same_workgroup:
-            prefix = [
-                "uint total_ids = get_local_size(0);",
-                "uint id_0 = get_local_id(0);"
-            ]
-            spin = "  spin(barrier, get_local_size(0));"
-        else:
-            prefix = [
-                "uint total_ids = get_local_size(0) * stress_params[9];",
-                "uint id_0 = shuffled_workgroup * get_local_size(0) + get_local_id(0);"
-            ]
-            spin = "  spin(barrier, get_local_size(0) * stress_params[9]);"
-        statements = [
-            "if (stress_params[4]) {",
-            "  do_stress(scratchpad, scratch_locations, stress_params[5], stress_params[6]);",
-            "}",
-            "if (stress_params[0]) {",
-            spin,
-            "}"
-        ]
-        return prefix + suffix + test_mem_locs + statements
-
-    def generate_helper_fns(self):
-        permute_fn = [
-            "static uint permute_id(uint id, uint factor, uint mask) {",
-            "  return (id * factor) % mask;",
-            "}",
-            ""
-        ]
-        stripe_fn = [
-            "static uint stripe_workgroup(uint workgroup_id, uint local_id, uint testing_workgroups) {",
-            "  return (workgroup_id + 1 + local_id % (testing_workgroups - 1)) % testing_workgroups;",
-            "}"
-        ]
-        return "\n".join(permute_fn + stripe_fn)
-
-    def generate_meta(self):
-        return "".join([self.generate_helper_fns()])
-
-    def generate_result_meta(self):
-        return "".join([self.generate_helper_fns()])
-
-    def generate_stress(self):
-        body = ["static void do_stress(__global uint* scratchpad, __global uint* scratch_locations, uint iterations, uint pattern) {",
-                "for (uint i = 0; i < iterations; i++) {"]
-        i = 0
-        for first in self.openCL_stress_first_access:
-            for second in self.openCL_stress_second_access[first]:
-                if i == 0:
-                    body += ["  if (pattern == 0) {"]
-                else:
-                    body += ["  }} else if (pattern == {}) {{".format(i)]
-                body += ["    {}".format(statement) for statement in self.openCL_stress_first_access[first]]
-                body += ["    {}".format(statement) for statement in self.openCL_stress_second_access[first][second]]
-                i += 1
-        body += ["  }", "}"]
-        return "\n".join(["\n  ".join(body), "}"])
-
-    def generate_spin(self):
-        header = "static void spin(__global atomic_uint* barrier, uint limit) {"
-        body = "\n  ".join([
-            header,
-            "int i = 0;",
-            "uint val = atomic_fetch_add_explicit(barrier, 1, memory_order_relaxed);",
-            "while (i < 1024 && val < limit) {",
-            "  val = atomic_load_explicit(barrier, memory_order_relaxed);",
-            "  i++;",
-            "}"
-        ])
-        return "\n".join([body, "}"])
-
     def read_repr(self, instr, i):
-        if self.workgroup_memory:
+        if self.memory_type = "atomic_workgroup":
             loc = "wg_test_locations"
         else:
             loc = "test_locations"
@@ -299,7 +221,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
         return template.format(instr.variable, loc, instr.mem_loc, i, self.openCL_mem_order[instr.mem_order])
 
     def write_repr(self, instr, i):
-        if self.workgroup_memory:
+        if self.memory_type == "atomic_workgroup":
             loc = "wg_test_locations"
         else:
             loc = "test_locations"
@@ -310,20 +232,13 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
         return template.format(loc, instr.mem_loc, i, instr.value, self.openCL_mem_order[instr.mem_order])
 
     def fence_repr(self, instr):
-        if self.workgroup_memory:
+        if self.memory_type == "atomic_workgroup":
             return "atomic_work_item_fence(CLK_LOCAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
         else:
             return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
 
-
-    def barrier_repr(self, instr):
-        if self.workgroup_memory:
-            return "atomic_work_item_fence(CLK_LOCAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
-        else:
-            return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
-
-    def results_repr(self, variable, i):
-        if self.same_workgroup:
+    def store_read_result_repr(self, variable, i):
+        if self.test_type == "intra_workgroup":
             shift_mem_loc = "shuffled_workgroup * get_local_size(0) + "
         else:
             shift_mem_loc = ""
@@ -332,6 +247,35 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
         else:
             result_template = " + 1"
         return "atomic_store(&read_results[{}id_{} * 2{}], {});".format(shift_mem_loc, i, result_template, variable)
+
+    def store_workgroup_mem_repr(self, _id):
+        if self.test_type == "intra_workgroup":
+            shift_mem_loc = "shuffled_workgroup * get_local_size(0) + "
+        else:
+            shift_mem_loc = ""
+        result.append("atomic_store(&test_locations[{} * stress_params[10] * 2 + {}], atomic_load(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
+
+
+    def post_cond_var_repr(self, condition):
+        return "{} == {}".format(condition.identifier, condition.value)
+
+    def post_cond_mem_repr(self, condition):
+        return "mem_{}_0 == {}".format(condition.identifier, condition.value)
+
+    def post_cond_and_node_repr(self, conditions):
+        return "(" + " && ".join(conditions) + ")"
+
+    def generate_behavior_check(self, cond, key, first_behavior, last_behavior):
+        statements = []
+        if first_behavior:
+            template = "if ({}) {{"
+        else:
+            template = "}} else if ({}) {{"
+        statements.append(template.format(cond))
+        statements.append("  atomic_fetch_add(&test_results[{}], 1);".format(key))
+        if last_behavior:
+            statements.append("}")
+        return statements
 
     def generate_stress_call(self):
         return [
