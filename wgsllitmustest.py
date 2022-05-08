@@ -232,7 +232,7 @@ let workgroupXSize = 256u;
 
     workgroup_memory_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + atomic_workgroup_memory + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
 
-    workgroup_memory_non_atomic_test_shader_code = shader_mem_structures + non_atomic_test_shader_bindings + non_atomic_workgroup_memory + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
+    workgroup_memory_non_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + non_atomic_workgroup_memory + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
 
     result_shader_common_code = shader_mem_structures + result_shader_bindings + memory_location_fns + shader_entry_point
 
