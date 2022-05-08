@@ -25,8 +25,8 @@ class VulkanLitmusTest(litmustest.LitmusTest):
   __global uint* stress_params
 """
 
-    atomic_workgroup_memory = """TODO"""
-    non_atomic_workgroup_memory = """TODO"""
+    atomic_local_memory = "  __local atomic_uint wg_test_locations[3584];"
+    non_atomic_local_memory = "  __local uint wg_test_locations[3584];"
 
     memory_location_fns = """
 static uint permute_id(uint id, uint factor, uint mask) {
@@ -104,7 +104,14 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
     }
 """
 
-    intra_workgroup_test_shader_code = """TODO"""
+    intra_workgroup_test_shader_code = """
+    uint total_ids = get_local_size(0);
+    uint id_0 = get_local_id(0);
+    uint id_1 = permute_id(get_local_id(0), stress_params[7], get_local_size(0));""" + test_shader_common_calculations + """
+    if (stress_params[0]) {{
+      spin(barrier, get_local_size(0));
+    }}
+    """
 
     test_shader_common_footer = """
   } else if (stress_params[1]) {
@@ -133,6 +140,13 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
     result_shader_common_footer = """
 }
     """
+
+    global_memory_atomic_test_shader_code = memory_location_fns + test_shader_fns + shader_fn_call + atomic_test_shader_args + test_shader_common_header
+    global_memory_non_atomic_test_shader_code = memory_location_fns + test_shader_fns + shader_fn_call + non_atomic_test_shader_args + test_shader_common_header
+    local_memory_atomic_test_shader_code = memory_location_fns + test_shader_fns + shader_fn_call + atomic_test_shader_args + atomic_local_memory + test_shader_common_header
+    local_memory_non_atomic_test_shader_code = memory_location_fns + test_shader_fns + shader_fn_call + atomic_test_shader_args + non_atomic_local_memory + test_shader_common_header
+
+    result_shader_common_code = memory_locaion_fns + shader_fn_call + result_shader_args
 
 
     opencl_stress_mem_location = "scratchpad[scratch_locations[get_group_id(0)]]"
