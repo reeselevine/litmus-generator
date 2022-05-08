@@ -1,6 +1,6 @@
 {
   "testName": "corr-storage-workgroup",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [

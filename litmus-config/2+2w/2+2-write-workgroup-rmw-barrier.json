@@ -1,7 +1,7 @@
 {
   "testName": "2+2-write-workgroup-rmw-barrier",
-  "sameWorkgroup": true,
-  "workgroupMemory": true,
+  "testType": "intra_workgroup",
+  "memoryType": "atomic_workgroup",
   "threads": [
     {
       "actions": [

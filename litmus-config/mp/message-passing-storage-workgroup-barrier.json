@@ -1,6 +1,6 @@
 {
   "testName": "message-passing-storage-workgroup-barrier",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [

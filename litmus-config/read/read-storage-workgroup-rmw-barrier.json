@@ -1,6 +1,6 @@
 {
   "testName": "read-storage-workgroup-rmw-barrier",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [
