@@ -177,16 +177,6 @@ let workgroupXSize = 256u;
       do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);
     }}"""
 
-    storage_intra_workgroup_calculations = """
-    let x_0 = (shuffled_workgroup * workgroupXSize + id_0) * stress_params.mem_stride * 2u;
-    let y_0 = (shuffled_workgroup * workgroupXSize + permute_id(id_0, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
-    let x_1 = (shuffled_workgroup * workgroupXSize + id_1) * stress_params.mem_stride * 2u;
-    let y_1 = (shuffled_workgroup * workgroupXSize + permute_id(id_1, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
-    if (stress_params.pre_stress == 1u) {
-      do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);
-    }"""
-
-
     inter_workgroup_test_shader_code = """
     let total_ids = workgroupXSize * stress_params.testing_workgroups;
     let id_0 = shuffled_workgroup * workgroupXSize + local_invocation_id[0];
@@ -229,6 +219,7 @@ let workgroupXSize = 256u;
     intra_workgroup_result_shader_code = result_shader_common_calculations + """
   let total_ids = workgroupXSize;
   let y_0 = (workgroup_id[0] * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+  let mem_y_0 = atomicLoad(&test_locations.value[y_0]);
 """
 
     result_shader_common_footer = """
