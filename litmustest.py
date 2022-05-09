@@ -165,7 +165,7 @@ class LitmusTest:
         return (needs_mem, result)
 
     def generate_results_aggregator(self):
-        result_code = ["  " + "\n  ".join(self.generate_result_shader_body())]
+        result_code = ["  " + "\n  ".join(self.generate_behavior_checks())]
         shader = self.build_result_shader("\n".join(result_code))
         result_filename = "target/" + self.test_name + "-results" + self.file_ext()
         os.makedirs(os.path.dirname(result_filename), exist_ok=True)
@@ -181,21 +181,6 @@ class LitmusTest:
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":
                 return self.post_cond_and_node_repr([self.generate_post_condition(cond) for cond in condition.conditions])
-
-    def generate_result_shader_body(self):
-        first_behavior = True
-        last_behavior = False
-        statements = []
-        seen_ids = set()
-        i = 0
-        for behavior in self.behaviors:
-            if i == len(self.behaviors) - 1:
-                last_behavior = True
-            condition = self.generate_post_condition(behavior.post_condition)
-            statements += self.generate_behavior_check(condition, behavior.key, first_behavior, last_behavior)
-            first_behavior = False
-            i += 1
-        return statements
 
     def backend_repr(self, instr, i):
         if isinstance(instr, self.ReadInstruction):

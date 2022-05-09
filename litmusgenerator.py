@@ -1,6 +1,7 @@
 import json
 import argparse
 import wgsllitmustest
+import opencllitmustest
 import vulkanlitmustest
 
 def load_config(test_config):
@@ -15,10 +16,12 @@ def main():
     parser.add_argument("--gen_result_shader", action="store_true", help="If specified, also generates results aggregation shader for specified test.")
     args = parser.parse_args()
     test_config = load_config(args.test_config)
-    if args.backend == "vulkan":
-      test = vulkanlitmustest.VulkanLitmusTest(test_config)
-    elif args.backend == "wgsl":
+    if args.backend == "wgsl":
       test = wgsllitmustest.WgslLitmusTest(test_config)
+    elif args.backend == "opencl":
+      test = opencllitmustest.OpenCLLitmusTest(test_config)
+    elif args.backend == "vulkan":
+      test = vulkanlitmustest.VulkanLitmusTest(test_config)
     print("Generating {} litmus test for backend {}".format(test_config['testName'], args.backend))
     test.generate()
     if args.gen_result_shader:
