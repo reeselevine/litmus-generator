@@ -140,7 +140,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
 
     intra_workgroup_result_shader_code = result_shader_common_calculations + """
   uint total_ids = get_local_size(0);
-  uint y_0 = (workgroup_id[0] * get_local_size(0) + permute_id(get_local_id(0), stress_params[8], total_ids)) * stress_params[10] * 2 + stress_params[11];
+  uint y_0 = (get_group_id(0) * get_local_size(0) + permute_id(get_local_id(0), stress_params[8], total_ids)) * stress_params[10] * 2 + stress_params[11];
   uint mem_y_0 = atomic_load(&test_locations[y_0]);
 """
 

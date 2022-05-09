@@ -7,9 +7,9 @@ class VulkanLitmusTest(opencllitmustest.OpenCLLitmusTest):
         subprocess.run(["clspv", "--cl-std=CL2.0", "--inline-entry-points", "target/" + filename + ".cl", "-o",  "target/" + filename + ".spv"])
 
     def generate(self):
-        super()
+        super().generate()
         self.gen_spirv(self.test_name)
 
     def generate_results_aggregator(self):
-        super()
+        super().generate_results_aggregator()
         self.gen_spirv(self.test_name + "-results")
