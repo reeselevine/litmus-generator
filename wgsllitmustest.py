@@ -323,14 +323,17 @@ let workgroupXSize = 256u;
     def post_cond_and_node_repr(self, conditions):
         return "(" + " && ".join(conditions) + ")"
 
-    def generate_behavior_check(self, cond, key, first_behavior, last_behavior):
+    def generate_behavior_checks(self):
         statements = []
-        if first_behavior:
-            template = "if ({}) {{"
-        else:
-            template = "}} else if ({}) {{"
-        statements.append(template.format(cond))
-        statements.append("  atomicAdd(&test_results.{}, 1u);".format(key))
-        if last_behavior:
-            statements.append("}")
+        i = 0
+        for behavior in self.behaviors:
+            if i == 0:
+                template = "if ({}) {{"
+            else:
+                template = "}} else if ({}) {{"
+            statements.append(template.format(self.generate_post_condition(behavior.post_condition)))
+            statements.append("  atomicAdd(&test_results.{}, 1u);".format(behavior.key))
+            if i == len(self.behaviors) - 1:
+                statements.append("}")
+            i += 1
         return statements
