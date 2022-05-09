@@ -223,5 +223,5 @@ class LitmusTest:
     def post_cond_and_node_repr(self, conditions):
         pass
 
-    def generate_behavior_check(self, cond, key, first_behavior, last_behavior):
+    def generate_behavior_checks(self):
         pass
