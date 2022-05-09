@@ -1,220 +1,278 @@
-import litmustest
+from litmustest import LitmusTest
 
-class WgslLitmusTest(litmustest.LitmusTest):
+class WgslLitmusTest(LitmusTest):
 
-    wgsl_stress_mem_location = "scratchpad.value[addr]"
-    # returns the first access in the stress pattern
-    wgsl_stress_first_access = {
-        "store": ["{} = i;".format(wgsl_stress_mem_location)],
-        "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location),
-            "if (tmp1 > 100000u) {",
-            "  {} = i;".format(wgsl_stress_mem_location),
-            "  break;",
-            "}"]
+    # Defines common data structures used in memory model test shaders.
+    shader_mem_structures = """struct Memory {
+  value: array<u32>,
+};
+
+struct AtomicMemory {
+  value: array<atomic<u32>>,
+};
+
+struct ReadResult {
+  r0: atomic<u32>,
+  r1: atomic<u32>,
+};
+
+struct ReadResults {
+  value: array<ReadResult>,
+};
+
+struct StressParamsMemory {
+  do_barrier: u32,
+  mem_stress: u32,
+  mem_stress_iterations: u32,
+  mem_stress_pattern: u32,
+  pre_stress: u32,
+  pre_stress_iterations: u32,
+  pre_stress_pattern: u32,
+  permute_first: u32,
+  permute_second: u32,
+  testing_workgroups: u32,
+  mem_stride: u32,
+  location_offset: u32,
+};
+"""
+
+    # Structure to hold the counts of occurrences of the possible behaviors of a two-thread, four-instruction test.
+    # "seq0" means the first invocation's instructions are observed to have occurred before the second invocation's instructions.
+    # "seq1" means the second invocation's instructions are observed to have occurred before the first invocation's instructions.
+    # "interleaved" means there was an observation of some interleaving of instructions between the two invocations.
+    # "weak" means there was an observation of some ordering of instructions that is inconsistent with the WebGPU memory model.
+    four_behavior_test_result_struct = """struct TestResults {
+  seq0: atomic<u32>,
+  seq1: atomic<u32>,
+  interleaved: atomic<u32>,
+  weak: atomic<u32>,
+};
+
+"""
+
+    # Defines the possible behaviors of a two instruction test. Used to test the behavior of non-atomic memory with barriers and
+    # one-thread coherence tests.
+    # "seq" means that the expected, sequential behavior occurred.
+    # "weak" means that an unexpected, inconsistent behavior occurred.
+    two_behavior_test_result_struct = """struct TestResults {
+  seq: atomic<u32>,
+  weak: atomic<u32>,
+};
+
+"""
+
+    # Common bindings used in the test shader phase of a test.
+    common_test_shader_bindings = """
+@group(0) @binding(1) var<storage, read_write> results : ReadResults;
+@group(0) @binding(2) var<storage, read> shuffled_workgroups : Memory;
+@group(0) @binding(3) var<storage, read_write> barrier : AtomicMemory;
+@group(0) @binding(4) var<storage, read_write> scratchpad : Memory;
+@group(0) @binding(5) var<storage, read_write> scratch_locations : Memory;
+@group(0) @binding(6) var<uniform> stress_params : StressParamsMemory;
+"""
+
+    atomic_test_shader_bindings = common_test_shader_bindings + "@group(0) @binding(0) var<storage, read_write> test_locations : AtomicMemory;"
+
+    non_atomic_test_shader_bindings = common_test_shader_bindings + "@group(0) @binding(0) var<storage, read_write> test_locations : Memory;"
+
+    result_shader_bindings = """
+@group(0) @binding(0) var<storage, read_write> test_locations : AtomicMemory;
+@group(0) @binding(1) var<storage, read_write> read_results : ReadResults;
+@group(0) @binding(2) var<storage, read_write> test_results : TestResults;
+@group(0) @binding(3) var<uniform> stress_params : StressParamsMemory;"""
+
+    atomic_workgroup_memory = "var<workgroup> wg_test_locations: array<atomic<u32>, 3584>;"
+
+    non_atomic_workgroup_memory = "var<workgroup> wg_test_locations: array<u32, 3584>;"
+
+    memory_location_fns = """
+
+fn permute_id(id: u32, factor: u32, mask: u32) -> u32 {
+   return (id * factor) % mask;
+ }
+
+ fn stripe_workgroup(workgroup_id: u32, local_id: u32) -> u32 {
+   return (workgroup_id + 1u + local_id % (stress_params.testing_workgroups - 1u)) % stress_params.testing_workgroups;
+ }
+"""
+
+    test_shader_fns = """
+fn spin(limit: u32) {
+  var i : u32 = 0u;
+  var bar_val : u32 = atomicAdd(&barrier.value[0], 1u);
+  loop {
+    if (i == 1024u || bar_val >= limit) {
+      break;
     }
-    # given a first access, returns the second access in the stress pattern
-    wgsl_stress_second_access = {
-        "store": {
-            "store": ["{} = i + 1u;".format(wgsl_stress_mem_location)],
-            "load": ["let tmp1: u32 = {};".format(wgsl_stress_mem_location),
-                "if (tmp1 > 100000u) {",
-                "  {} = i;".format(wgsl_stress_mem_location),
-                "  break;",
-                "}"]
-        },
-        "load": {
-            "store": ["{} = i;".format(wgsl_stress_mem_location)],
-            "load": ["let tmp2: u32 = {};".format(wgsl_stress_mem_location),
-                "if (tmp2 > 100000u) {",
-                "  {} = i;".format(wgsl_stress_mem_location),
-                "  break;",
-                "}"]
+    bar_val = atomicAdd(&barrier.value[0], 0u);
+    i = i + 1u;
+  }
+}
+
+fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {
+  let addr = scratch_locations.value[workgroup_id];
+  switch(pattern) {
+    case 0u: {
+      for(var i: u32 = 0u; i < iterations; i = i + 1u) {
+        scratchpad.value[addr] = i;
+        scratchpad.value[addr] = i + 1u;
+      }
+    }
+    case 1u: {
+      for(var i: u32 = 0u; i < iterations; i = i + 1u) {
+        scratchpad.value[addr] = i;
+        let tmp1: u32 = scratchpad.value[addr];
+        if (tmp1 > 100000u) {
+          scratchpad.value[addr] = i;
+          break;
         }
+      }
     }
+    case 2u: {
+      for(var i: u32 = 0u; i < iterations; i = i + 1u) {
+        let tmp1: u32 = scratchpad.value[addr];
+        if (tmp1 > 100000u) {
+          scratchpad.value[addr] = i;
+          break;
+        }
+        scratchpad.value[addr] = i;
+      }
+    }
+    case 3u: {
+      for(var i: u32 = 0u; i < iterations; i = i + 1u) {
+        let tmp1: u32 = scratchpad.value[addr];
+        if (tmp1 > 100000u) {
+          scratchpad.value[addr] = i;
+          break;
+        }
+        let tmp2: u32 = scratchpad.value[addr];
+        if (tmp2 > 100000u) {
+          scratchpad.value[addr] = i;
+          break;
+        }
+      }
+    }
+    default: {
+    }
+  }
+}
+"""
+
+    shader_entry_point = """
+let workgroupXSize = 256u;
+@stage(compute) @workgroup_size(workgroupXSize) fn main(
+  @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+  @builtin(workgroup_id) workgroup_id : vec3<u32>) {"""
+
+    test_shader_common_header = """
+  let shuffled_workgroup = shuffled_workgroups.value[workgroup_id[0]];
+  if (shuffled_workgroup < stress_params.testing_workgroups) {"""
+
+    test_shader_common_calculations = """
+    let x_0 = ({}id_0) * stress_params.mem_stride * 2u;
+    let y_0 = ({}permute_id(id_0, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    let x_1 = ({}id_1) * stress_params.mem_stride * 2u;
+    let y_1 = ({}permute_id(id_1, stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+    if (stress_params.pre_stress == 1u) {{
+      do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);
+    }}"""
+
+    inter_workgroup_test_shader_code = """
+    let total_ids = workgroupXSize * stress_params.testing_workgroups;
+    let id_0 = shuffled_workgroup * workgroupXSize + local_invocation_id[0];
+    let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);
+    let id_1 = new_workgroup * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize);""" + test_shader_common_calculations.format("", "", "", "") + """
+    if (stress_params.do_barrier == 1u) {
+      spin(workgroupXSize * stress_params.testing_workgroups);
+    }
+"""
+
+    intra_workgroup_test_shader_code = """
+    let total_ids = workgroupXSize;
+    let id_0 = local_invocation_id[0];
+    let id_1 = permute_id(local_invocation_id[0], stress_params.permute_first, workgroupXSize);""" + test_shader_common_calculations + """
+    if (stress_params.do_barrier == 1u) {{
+      spin(workgroupXSize);
+    }}
+"""
+
+    test_shader_common_footer = """
+  } else if (stress_params.mem_stress == 1u) {
+    do_stress(stress_params.mem_stress_iterations, stress_params.mem_stress_pattern, shuffled_workgroup);
+  }
+}
+"""
+
+    result_shader_common_calculations = """
+  let id_0 = workgroup_id[0] * workgroupXSize + local_invocation_id[0];
+  let x_0 = id_0 * stress_params.mem_stride * 2u;
+  let mem_x_0 = atomicLoad(&test_locations.value[x_0]);
+  let r0 = atomicLoad(&read_results.value[id_0].r0);
+  let r1 = atomicLoad(&read_results.value[id_0].r1);"""
+
+    inter_workgroup_result_shader_code = result_shader_common_calculations + """
+  let total_ids = workgroupXSize * stress_params.testing_workgroups;
+  let y_0 = permute_id(id_0, stress_params.permute_second, total_ids) * stress_params.mem_stride * 2u + stress_params.location_offset;
+  let mem_y_0 = atomicLoad(&test_locations.value[y_0]);
+"""
+
+    intra_workgroup_result_shader_code = result_shader_common_calculations + """
+  let total_ids = workgroupXSize;
+  let y_0 = (workgroup_id[0] * workgroupXSize + permute_id(local_invocation_id[0], stress_params.permute_second, total_ids)) * stress_params.mem_stride * 2u + stress_params.location_offset;
+  let mem_y_0 = atomicLoad(&test_locations.value[y_0]);
+"""
+
+    result_shader_common_footer = """
+}
+"""
+
+    storage_memory_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
+
+    storage_memory_non_atomic_test_shader_code = shader_mem_structures + non_atomic_test_shader_bindings + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
+
+    workgroup_memory_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + atomic_workgroup_memory + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
+
+    workgroup_memory_non_atomic_test_shader_code = shader_mem_structures + atomic_test_shader_bindings + non_atomic_workgroup_memory + memory_location_fns + test_shader_fns + shader_entry_point + test_shader_common_header
+
+    result_shader_common_code = shader_mem_structures + result_shader_bindings + memory_location_fns + shader_entry_point
+
+    def build_test_shader(self, test_code):
+        mem_type_code = ""
+        storage_shift = ""
+        if self.memory_type == "atomic_storage":
+            mem_type_code = self.storage_memory_atomic_test_shader_code
+            storage_shift = "shuffled_workgroup * workgroupXSize + "
+        elif self.memory_type == "non_atomic_storage":
+            mem_type_code = self.storage_memory_non_atomic_test_shader_code
+        elif self.memory_type == "atomic_workgroup":
+            mem_type_code = self.workgroup_memory_atomic_test_shader_code
+        elif self.memory_type == "non_atomic_workgroup":
+            mem_type_code = self.workgroup_memory_non_atomic_test_shader_code
+        test_type_code = ""
+        if self.test_type == "inter_workgroup":
+            test_type_code = self.inter_workgroup_test_shader_code
+        elif self.test_type == "intra_workgroup":
+            test_type_code = self.intra_workgroup_test_shader_code.format(storage_shift, storage_shift, storage_shift, storage_shift)
+        return mem_type_code + test_type_code + test_code + self.test_shader_common_footer
+
+    def build_result_shader(self, result_code):
+        result_structure = ""
+        if self.num_behaviors == 2:
+            result_structure = self.two_behavior_test_result_struct
+        elif self.num_behaviors == 4:
+            result_structure = self.four_behavior_test_result_struct
+        test_type_code = ""
+        if self.test_type == "inter_workgroup":
+            test_type_code = self.inter_workgroup_result_shader_code
+        elif self.test_type == "intra_workgroup":
+            test_type_code = self.intra_workgroup_result_shader_code
+        return result_structure + self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
 
     def file_ext(self):
         return ".wgsl"
 
-    def generate_mem_loc(self, mem_loc, i, offset, should_shift, workgroup_id="shuffled_workgroup", use_local_id=False):
-        shift_mem_loc = ""
-        if should_shift:
-            shift_mem_loc = "{} * u32(workgroupXSize) + ".format(workgroup_id)
-        if offset == 0:
-            base = "{}id_{}".format(shift_mem_loc, i);
-            offset_template = ""
-        else:
-            if use_local_id:
-                to_permute = "local_invocation_id[0]"
-            else:
-                to_permute = "id_{}".format(i)
-            base = "{}permute_id({}, stress_params.permute_second, total_ids)".format(shift_mem_loc, to_permute)
-            if offset == 1:
-                offset_template = " + stress_params.location_offset"
-            else:
-                offset_template = " + {}u * stress_params.location_offset".format(offset)
-        return "let {}_{} = ({}) * stress_params.mem_stride * 2u{};".format(mem_loc, i, base, offset_template)
-
-    def generate_threads_header(self, test_mem_locs):
-        new_local_id = "permute_id(local_invocation_id[0], stress_params.permute_first, u32(workgroupXSize))"
-        suffix = []
-        if len(self.threads) > 1:
-            if self.same_workgroup:
-                suffix = ["let id_1 = {}".format(new_local_id)]
-            else:
-                suffix = [
-                    "let new_workgroup = stripe_workgroup(shuffled_workgroup, local_invocation_id[0]);",
-                    "let id_1 = new_workgroup * u32(workgroupXSize) + {};".format(new_local_id)
-                ]
-        if self.same_workgroup:
-            prefix = [
-                "let total_ids = u32(workgroupXSize);",
-                "let id_0 = local_invocation_id[0];"
-            ]
-            spin = "  spin(u32(workgroupXSize));"
-        else:
-            prefix = [
-                "let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;",
-                "let id_0 = shuffled_workgroup * u32(workgroupXSize) + local_invocation_id[0];"
-            ]
-            spin = "  spin(u32(workgroupXSize) * stress_params.testing_workgroups);"
-        statements = [
-            "if (stress_params.pre_stress == 1u) {",
-            "  do_stress(stress_params.pre_stress_iterations, stress_params.pre_stress_pattern, shuffled_workgroup);",
-            "}",
-            "if (stress_params.do_barrier == 1u) {",
-            spin,
-            "}"
-        ]
-        return prefix + suffix + test_mem_locs + statements
-
-    def generate_read_result_type(self):
-        return [
-            "struct ReadResult {",
-            "  r0: atomic<u32>;",
-            "  r1: atomic<u32>;",
-            "};"
-        ]
-
-    def generate_test_result_type(self):
-        statements = ["[[block]] struct TestResults {"]
-        for behavior in self.behaviors:
-            statements.append("  {}: atomic<u32>;".format(behavior.key))
-        statements.append("};")
-        return statements
-
-    def generate_stress_params_type(self):
-        return [
-            "[[block]] struct StressParamsMemory {",
-            "  [[size(16)]] do_barrier: u32;",
-            "  [[size(16)]] mem_stress: u32;",
-            "  [[size(16)]] mem_stress_iterations: u32;",
-            "  [[size(16)]] mem_stress_pattern: u32;",
-            "  [[size(16)]] pre_stress: u32;",
-            "  [[size(16)]] pre_stress_iterations: u32;",
-            "  [[size(16)]] pre_stress_pattern: u32;",
-            "  [[size(16)]] permute_first: u32;",
-            "  [[size(16)]] permute_second: u32;",
-            "  [[size(16)]] testing_workgroups: u32;",
-            "  [[size(16)]] mem_stride: u32;",
-            "  [[size(16)]] location_offset: u32;",
-            "};"
-        ]
-
-    def generate_common_types(self):
-        atomic_type = "\n".join(["[[block]] struct AtomicMemory {", "  value: array<atomic<u32>>;", "};"])
-        read_result_type = "\n".join(self.generate_read_result_type())
-        read_results_type = "\n".join(["[[block]] struct ReadResults {", "  value: array<ReadResult>;", "};"])
-        stress_params_type = "\n".join(self.generate_stress_params_type())
-        return [atomic_type, read_result_type, read_results_type, stress_params_type]
-
-    def generate_types(self):
-        normal_type = "\n".join(["[[block]] struct Memory {", "  value: array<u32>;", "};"])
-        return "\n\n".join([normal_type] + self.generate_common_types())
-
-    def generate_result_types(self):
-        test_result_type = "\n".join(self.generate_test_result_type())
-        return "\n\n".join([test_result_type] + self.generate_common_types())
-
-    def generate_bindings(self):
-        bindings = [
-            "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> results : ReadResults;",
-            "[[group(0), binding(2)]] var<storage, read_write> shuffled_workgroups : Memory;",
-            "[[group(0), binding(3)]] var<storage, read_write> barrier : AtomicMemory;",
-            "[[group(0), binding(4)]] var<storage, read_write> scratchpad : Memory;",
-            "[[group(0), binding(5)]] var<storage, read_write> scratch_locations : Memory;",
-            "[[group(0), binding(6)]] var<uniform> stress_params : StressParamsMemory;"
-        ]
-        if self.workgroup_memory:
-            bindings += ["", "var<workgroup> wg_test_locations: array<atomic<u32>, 3584>;"]
-        return "\n".join(bindings)
-
-    def generate_result_bindings(self):
-        return "\n".join([
-            "[[group(0), binding(0)]] var<storage, read_write> test_locations : AtomicMemory;",
-            "[[group(0), binding(1)]] var<storage, read_write> read_results : ReadResults;",
-            "[[group(0), binding(2)]] var<storage, read_write> test_results : TestResults;",
-            "[[group(0), binding(3)]] var<uniform> stress_params : StressParamsMemory;"
-        ])
-
-    def generate_helper_fns(self):
-        permute_fn = [
-            "fn permute_id(id: u32, factor: u32, mask: u32) -> u32 {",
-            "  return (id * factor) % mask;",
-            "}",
-            ""
-        ]
-        stripe_fn = [
-            "fn stripe_workgroup(workgroup_id: u32, local_id: u32) -> u32 {",
-            "  return (workgroup_id + 1u + local_id % (stress_params.testing_workgroups - 1u)) % stress_params.testing_workgroups;",
-            "}"
-        ]
-        return "\n".join(permute_fn + stripe_fn)
-
-    def generate_meta(self):
-        return "\n\n".join([self.generate_types(), self.generate_bindings(), self.generate_helper_fns()])
-
-    def generate_result_meta(self):
-        return "\n\n".join([self.generate_result_types(), self.generate_result_bindings(), self.generate_helper_fns()])
-
-    def generate_stress(self):
-        body = [
-            "fn do_stress(iterations: u32, pattern: u32, workgroup_id: u32) {",
-            "let addr = scratch_locations.value[workgroup_id];",
-            "switch(pattern) {"
-        ]
-        i = 0
-        for first in self.wgsl_stress_first_access:
-            for second in self.wgsl_stress_second_access[first]:
-                body += [
-                    "  case {}u: {{".format(i),
-                    "    for(var i: u32 = 0u; i < iterations; i = i + 1u) {"]
-                body += ["      {}".format(statement) for statement in self.wgsl_stress_first_access[first]]
-                body += ["      {}".format(statement) for statement in self.wgsl_stress_second_access[first][second]]
-                body += ["    }", "  }"]
-                i += 1
-        body += ["  default: {", "    break;", "  }"]
-        body += ["}"]
-        return "\n".join(["\n  ".join(body), "}"])
-
-    def generate_spin(self):
-        body = [
-            "fn spin(limit: u32) {",
-            "  var i : u32 = 0u;",
-            "  var bar_val : u32 = atomicAdd(&barrier.value[0], 1u);",
-            "  loop {",
-            "    if (i == 1024u || bar_val >= limit) {",
-            "      break;",
-            "    }",
-            "    bar_val = atomicAdd(&barrier.value[0], 0u);",
-            "    i = i + 1u;",
-            "  }",
-            "}"
-        ]
-        return "\n".join(body)
-
     def read_repr(self, instr, i):
-        if self.workgroup_memory:
+        if self.memory_type == "atomic_workgroup":
             loc = "wg_test_locations"
         else:
             loc = "test_locations.value"
@@ -225,144 +283,57 @@ class WgslLitmusTest(litmustest.LitmusTest):
         return template.format(instr.variable, loc, instr.mem_loc, i)
 
     def write_repr(self, instr, i):
-        if self.workgroup_memory:
+        if self.memory_type == "atomic_workgroup":
             loc = "wg_test_locations"
         else:
             loc = "test_locations.value"
         if instr.use_rmw:
-            template = "let unused = atomicExchange(&{}[{}_{}], {}u);"
+            template = "atomicExchange(&{}[{}_{}], {}u);"
         else:
             template = "atomicStore(&{}[{}_{}], {}u);"
         return template.format(loc, instr.mem_loc, i, instr.value)
 
     def fence_repr(self, instr):
-        pass
-
-    def barrier_repr(self, instr):
-        if self.workgroup_memory:
+        if self.memory_type == "atomic_workgroup":
             return "workgroupBarrier();"
         else:
             return "storageBarrier();"
 
-    def results_repr(self, variable, i):
-        if self.same_workgroup:
-            shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize) + "
+    def store_read_result_repr(self, variable, i):
+        if self.test_type == "intra_workgroup":
+            shift_mem_loc = "shuffled_workgroup * workgroupXSize + "
         else:
             shift_mem_loc = ""
         return "atomicStore(&results.value[{}id_{}].{}, {});".format(shift_mem_loc, i, variable, variable)
 
-    def generate_stress_call(self):
-        return [
-            "  } elseif (stress_params.mem_stress == 1u) {",
-            "    do_stress(stress_params.mem_stress_iterations, stress_params.mem_stress_pattern, shuffled_workgroup);",
-            "  }"
-        ]
-
-    def generate_common_shader_def(self):
-      return [
-          "let workgroupXSize = 256;",
-          "[[stage(compute), workgroup_size(workgroupXSize)]] fn main(",
-          "  [[builtin(local_invocation_id)]] local_invocation_id : vec3<u32>,",
-          "  [[builtin(workgroup_id)]] workgroup_id : vec3<u32>) {"
-      ]
-
-    def generate_shader_def(self):
-        return "\n".join([
-            "let workgroupXSize = 256;",
-            "[[stage(compute), workgroup_size(workgroupXSize)]] fn main(",
-            "  [[builtin(local_invocation_id)]] local_invocation_id : vec3<u32>,",
-            "  [[builtin(workgroup_id)]] workgroup_id : vec3<u32>) {",
-            "  let shuffled_workgroup = shuffled_workgroups.value[workgroup_id[0]];",
-            "  if (shuffled_workgroup < stress_params.testing_workgroups) {"
-        ])
-
-    def generate_result_shader_def(self):
-        if self.same_workgroup:
-            total_ids = "  let total_ids = u32(workgroupXSize);"
+    def store_workgroup_mem_repr(self, _id):
+        if self.test_type == "intra_workgroup":
+            shift_mem_loc = "shuffled_workgroup * workgroupXSize * "
         else:
-            total_ids = "  let total_ids = u32(workgroupXSize) * stress_params.testing_workgroups;"
-        return "\n".join(self.generate_common_shader_def() + [
-          total_ids,
-          "  let id_0 = workgroup_id[0] * u32(workgroupXSize) + local_invocation_id[0];"
-        ])
+            shift_mem_loc = ""
+        mem_loc = "{}_{}".format(_id, len(self.threads) - 1)
+        return "atomicStore(&test_locations.value[{}stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc)
 
-    def generate_post_condition(self, condition):
-        if isinstance(condition, self.PostConditionLeaf):
-            template = ""
-            if condition.output_type == "variable":
-                template = "{} == {}u"
-            elif condition.output_type == "memory":
-                template = "mem_{}_0 == {}u"
-            return template.format(condition.identifier, condition.value)
-        elif isinstance(condition, self.PostConditionNode):
-            if condition.operator == "and":
-                return "(" + " && ".join([self.generate_post_condition(cond) for cond in condition.conditions]) + ")"
+    def post_cond_var_repr(self, condition):
+        return "{} == {}u".format(condition.identifier, condition.value)
 
-    def generate_result_storage(self):
-        statements = ["workgroupBarrier();"]
-        seen_ids = set()
-        for behavior in self.behaviors:
-            statements += self.generate_post_condition_stores(behavior.post_condition, seen_ids)
-        return statements
+    def post_cond_mem_repr(self, condition):
+        return "mem_{}_0 == {}u".format(condition.identifier, condition.value)
 
-    def generate_post_condition_stores(self, condition, seen_ids):
-        result = []
-        shift_mem_loc = "shuffled_workgroup * u32(workgroupXSize)"
-        if isinstance(condition, self.PostConditionLeaf):
-            if condition.identifier not in seen_ids:
-                seen_ids.add(condition.identifier)
-                if condition.output_type == "variable":
-                    variable = condition.identifier
-                    if self.same_workgroup:
-                        shift = "{} + ".format(shift_mem_loc)
-                    else:
-                        shift = ""
-                    result.append("atomicStore(&results.value[{}id_{}].{}, {});".format(shift, self.read_threads[variable], variable, variable))
-                elif condition.output_type == "memory" and self.workgroup_memory:
-                    mem_loc = "{}_{}".format(condition.identifier, len(self.threads) - 1)
-                    result.append("atomicStore(&test_locations.value[{} * stress_params.mem_stride * 2u + {}], atomicLoad(&wg_test_locations[{}]));".format(shift_mem_loc, mem_loc, mem_loc))
-        elif isinstance(condition, self.PostConditionNode):
-            for cond in condition.conditions:
-                result += self.generate_post_condition_stores(cond, seen_ids)
-        return result
+    def post_cond_and_node_repr(self, conditions):
+        return "(" + " && ".join(conditions) + ")"
 
-
-    def generate_post_condition_loads(self, condition, seen_ids):
-        result = []
-        if isinstance(condition, self.PostConditionLeaf):
-            if condition.identifier not in seen_ids:
-                seen_ids.add(condition.identifier)
-                if condition.output_type == "variable":
-                    result.append("let {} = atomicLoad(&read_results.value[id_0].{});".format(condition.identifier, condition.identifier))
-                elif condition.output_type == "memory":
-                    shift = False
-                    use_local_id = False
-                    if self.same_workgroup:
-                        use_local_id = True
-                        if self.variable_offsets[condition.identifier] > 0:
-                            shift = True
-                    result.append(self.generate_mem_loc(condition.identifier, 0, self.variable_offsets[condition.identifier], shift, "workgroup_id[0]", use_local_id))
-                    var = "{}_0".format(condition.identifier)
-                    result.append("let mem_{} = atomicLoad(&test_locations.value[{}]);".format(var, var))
-        elif isinstance(condition, self.PostConditionNode):
-            for cond in condition.conditions:
-                result += self.generate_post_condition_loads(cond, seen_ids)
-        return result
-
-    def generate_result_shader_body(self):
-        first_behavior = True
+    def generate_behavior_checks(self):
         statements = []
-        seen_ids = set()
+        i = 0
         for behavior in self.behaviors:
-            statements += self.generate_post_condition_loads(behavior.post_condition, seen_ids)
-        for behavior in self.behaviors:
-            condition = self.generate_post_condition(behavior.post_condition)
-            if first_behavior:
+            if i == 0:
                 template = "if ({}) {{"
             else:
-                template = "}} elseif ({}) {{"
-            statements.append(template.format(condition))
+                template = "}} else if ({}) {{"
+            statements.append(template.format(self.generate_post_condition(behavior.post_condition)))
             statements.append("  atomicAdd(&test_results.{}, 1u);".format(behavior.key))
-            first_behavior = False
-        statements.append("}")
+            if i == len(self.behaviors) - 1:
+                statements.append("}")
+            i += 1
         return statements

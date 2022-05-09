@@ -1,6 +1,6 @@
 {
   "testName": "2+2-write-storage-workgroup-rmw-barrier",
-  "sameWorkgroup": true,
+  "testType": "intra_workgroup",
   "threads": [
     {
       "actions": [
