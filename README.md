@@ -10,11 +10,11 @@ Along with the actual test shader, the test generator can optionally generate a 
 ### WebGPU
 WebGPU's shading language is called WGSL. This tool supports WGSL shader generation out of the box, with no additional dependencies. To generate a WGSL shader, run `python3 litmusgenerator.py --backend wgsl <path-to-config-file>`.
 
-### OpenCL (WIP)
+### OpenCL
 OpenCL kernels are supported with no additional dependencies. To generate an OpenCL shader, run `python3 litmusgenerator.py --backend opencl <path-to-config-file>`.
 
-### Vulkan (WIP)
-Vulkan's shading language is called SPIR-V. Since SPIR-V is an intermediate representation, this tool does not generate SPIR-V directly. Instead, the tool first generates an OpenCL kernel and uses [clspv](https://github.com/google/clspv) to compile to SPIR-V. Therefore, for Vulkan test generation to work correctly clspv must be available as an executable on your system. To generate a SPIR-V shader, run `python3 litmusgenerator.py --backend vulkan <path-to-config-file>`.
+### Vulkan
+Vulkan's shading language is called SPIR-V. Since SPIR-V is an intermediate representation, this tool does not generate SPIR-V directly. Instead, the tool first generates an OpenCL kernel and uses [clspv](https://github.com/google/clspv) to compile to SPIR-V. Therefore, for Vulkan test generation to work correctly clspv must be available on your PATH. If cslpv is not available, the tool will still generate an OpenCL kernel. To generate a SPIR-V shader, run `python3 litmusgenerator.py --backend vulkan <path-to-config-file>`.
 
 ## Running a Test
 After generating your shaders, you probably want to run them. Depending on the target backend, the process for doing so will differ. To understand more about how the shaders actually work and their motivation, see [this](https://docs.google.com/presentation/d/1Gr8zbiE8yfBaijAqniv_rJbvs_mJzKapvfBoHkTZNjQ/edit) presentation.
@@ -27,5 +27,3 @@ We do not currently have a way to directly run OpenCL kernels.
 
 ### Vulkan
 The `test-runner` directory includes a C++ setup for running generated SPIR-V shaders. In order to use this, ensure you have cmake and Vulkan installed on your system, then follow the usual process to build an executable. The executable takes as input the test shader, the result shader, and a parameter file. Note that the test runner has a dependency on https://github.com/reeselevine/easyvk, which should be instantiated as a git submodule.
-
-This process for running SPIR-V shaders on Vulkan is still a work in progress, so these instructions should get updated and include more detail as work continues.
