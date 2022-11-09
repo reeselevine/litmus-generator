@@ -205,10 +205,15 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
         return template.format(loc, instr.mem_loc, i, instr.value, self.openCL_mem_order[instr.mem_order])
 
     def fence_repr(self, instr):
-        if self.memory_type == "atomic_workgroup":
-            return "atomic_work_item_fence(CLK_LOCAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
+        if self.test_type == "intra_workgroup":
+          scope = "memory_scope_work_group"
         else:
-            return "atomic_work_item_fence(CLK_GLOBAL_MEM_FENCE, memory_order_seq_cst, memory_scope_device);"
+          scope = "memory_scope_device"
+        if self.memory_type == "atomic_workgroup":
+          mem_fence = "CLK_LOCAL_MEM_FENCE"
+        else:
+          mem_fence = "CLK_GLOBAL_MEM_FENCE"
+        return "atomic_work_item_fence({}, {}, {});".format(mem_fence, self.openCL_mem_order[instr.mem_order], scope)
 
     def store_read_result_repr(self, variable, i):
         if self.test_type == "intra_workgroup":
