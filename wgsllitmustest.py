@@ -55,7 +55,7 @@ struct StressParamsMemory {
     # "seq" means that the expected, sequential behavior occurred.
     # "weak" means that an unexpected, inconsistent behavior occurred.
     two_behavior_test_result_struct = """struct TestResults {
-  seq: atomic<u32>,
+  nonWeak: atomic<u32>,
   weak: atomic<u32>,
 };
 
@@ -323,12 +323,17 @@ let workgroupXSize = 256u;
     def post_cond_and_node_repr(self, conditions):
         return "(" + " && ".join(conditions) + ")"
 
+    def post_condition_else(self):
+        return ""
+
     def generate_behavior_checks(self):
         statements = []
         i = 0
         for behavior in self.behaviors:
             if i == 0:
                 template = "if ({}) {{"
+            elif isinstance(behavior.post_condition, self.PostConditionElse):
+                template = "}} else {{"
             else:
                 template = "}} else if ({}) {{"
             statements.append(template.format(self.generate_post_condition(behavior.post_condition)))

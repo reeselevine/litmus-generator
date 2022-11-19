@@ -1,0 +1,68 @@
+{
+  "testName": "ww",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 2
+        },
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "read",
+          "memoryLocation": "x",
+          "variable": "r0"
+        },
+        {
+          "action": "read",
+          "memoryLocation": "y",
+          "variable": "r1"
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "variable",
+          "id": "r1",
+          "value": 3
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "nonWeak": {
+      "type": "else"
+    }
+  }
+}

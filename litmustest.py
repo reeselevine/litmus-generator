@@ -30,6 +30,9 @@ class LitmusTest:
             self.identifier = identifier
             self.value = value
 
+    class PostConditionElse:
+      pass
+
     class Instruction:
         pass
 
@@ -108,6 +111,8 @@ class LitmusTest:
             for cond in condition['conditions']:
                 children.append(self.build_post_condition(cond))
             return self.PostConditionNode(condition['op'], children)
+        elif condition['type'] == "else":
+          return self.PostConditionElse()
         else:
             return self.PostConditionLeaf(condition['type'], condition['id'], condition['value'])
 
@@ -181,6 +186,9 @@ class LitmusTest:
         elif isinstance(condition, self.PostConditionNode):
             if condition.operator == "and":
                 return self.post_cond_and_node_repr([self.generate_post_condition(cond) for cond in condition.conditions])
+        elif isinstance(condition, self.PostConditionElse):
+            return self.post_condition_else()
+
 
     def backend_repr(self, instr, i):
         if isinstance(instr, self.ReadInstruction):
@@ -221,6 +229,9 @@ class LitmusTest:
         pass
 
     def post_cond_and_node_repr(self, conditions):
+        pass
+
+    def post_condition_else(self):
         pass
 
     def generate_behavior_checks(self):
