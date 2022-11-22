@@ -25,7 +25,8 @@
           "useRMW": true
         },
         {
-          "action": "barrier"
+          "action": "barrier",
+          "memoryOrder": "acquire"
         },
         {
           "action": "write",

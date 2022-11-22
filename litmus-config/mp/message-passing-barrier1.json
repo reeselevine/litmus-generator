@@ -23,7 +23,8 @@
           "variable": "r0"
         },
         {
-          "action": "barrier"
+          "action": "barrier",
+          "memoryOrder": "acquire"
         },
         {
           "action": "read",

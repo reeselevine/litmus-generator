@@ -9,7 +9,8 @@
           "variable": "r0"
         },
         {
-          "action": "barrier"
+          "action": "barrier",
+          "memoryOrder": "release"
         },
         {
           "action": "write",
