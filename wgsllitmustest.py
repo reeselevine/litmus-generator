@@ -259,7 +259,7 @@ override workgroupXSize: u32;
         result_structure = ""
         if self.num_behaviors == 2:
             result_structure = self.two_behavior_test_result_struct
-        elif self.num_behaviors == 4:
+        else:
             result_structure = self.four_behavior_test_result_struct
         test_type_code = ""
         if self.test_type == "inter_workgroup":

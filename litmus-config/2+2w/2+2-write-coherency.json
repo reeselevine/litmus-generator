@@ -1,0 +1,70 @@
+{
+  "testName": "2+2-write-coherency",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 2
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 3
+        },
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 4
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 4
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 4
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "y",
+          "value": 1
+        }
+      ]
+    },
+    "weak": {
+      "type": "else"
+    }
+  }
+}

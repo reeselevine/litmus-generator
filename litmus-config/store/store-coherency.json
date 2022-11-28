@@ -1,0 +1,134 @@
+{
+  "testName": "store-coherency",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 2
+        },
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "read",
+          "memoryLocation": "y",
+          "variable": "r0"
+        },
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 3
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 3
+        }
+      ]
+    },
+    "seq1": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "interleaved0": {
+      "type": "op",
+      "op": "and",
+      "key": "interleaved",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 0
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 3
+        }
+      ]
+    },
+    "interleaved1": {
+      "type": "op",
+      "op": "and",
+      "key": "interleaved",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 3
+        }
+      ]
+    },
+    "interleaved2": {
+      "type": "op",
+      "op": "and",
+      "key": "interleaved",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 1
+        }
+      ]
+    },
+    "weak": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "memory",
+          "id": "x",
+          "value": 2
+        }
+      ]
+    }
+  }
+}

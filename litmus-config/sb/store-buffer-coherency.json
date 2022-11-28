@@ -1,0 +1,88 @@
+{
+  "testName": "store-buffer-coherency",
+  "threads": [
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "x",
+          "value": 1
+        },
+        {
+          "action": "read",
+          "memoryLocation": "y",
+          "variable": "r0"
+        }
+      ]
+    },
+    {
+      "actions": [
+        {
+          "action": "write",
+          "memoryLocation": "y",
+          "value": 2
+        },
+        {
+          "action": "read",
+          "memoryLocation": "x",
+          "variable": "r1"
+        }
+      ]
+    }
+  ],
+  "behaviors": {
+    "seq0": {
+      "type": "op",
+      "op": "and",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "variable",
+          "id": "r1",
+          "value": 2
+        }
+      ]
+    },
+    "interleaved0": {
+      "type": "op",
+      "op": "and",
+      "key": "interleaved",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 1
+        },
+        {
+          "type": "variable",
+          "id": "r1",
+          "value": 1
+        }
+      ]
+    },
+    "interleaved1": {
+      "type": "op",
+      "op": "and",
+      "key": "interleaved",
+      "conditions": [
+        {
+          "type": "variable",
+          "id": "r0",
+          "value": 2
+        },
+        {
+          "type": "variable",
+          "id": "r1",
+          "value": 2
+        }
+      ]
+    },
+    "weak": {
+      "type": "else"
+    }
+  }
+}
