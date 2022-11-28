@@ -119,7 +119,11 @@ class LitmusTest:
     def initialize_behaviors(self):
         self.num_behaviors = len(self.test_config['behaviors'])
         for behavior in self.test_config['behaviors']:
-            self.behaviors.append(self.Behavior(behavior, self.build_post_condition(self.test_config['behaviors'][behavior])))
+            if 'key' in self.test_config['behaviors'][behavior]:
+              key = self.test_config['behaviors'][behavior]['key']
+            else:
+              key = behavior
+            self.behaviors.append(self.Behavior(key, self.build_post_condition(self.test_config['behaviors'][behavior])))
 
     def generate(self):
         test_code = []

@@ -27,10 +27,19 @@ __kernel void litmus_test ("""
     non_atomic_test_shader_args =  """
   __global uint* test_locations,""" + common_test_shader_args
 
+    test_result_struct = """typedef struct TestResults {
+  atomic_uint seq0;
+  atomic_uint seq1;
+  atomic_uint interleaved;
+  atomic_uint weak;
+} TestResults;
+
+"""
+
     result_shader_args = """
   __global atomic_uint* test_locations,
   __global atomic_uint* read_results,
-  __global atomic_uint* test_results,
+  __global TestResults* test_results,
   __global uint* stress_params) {"""
 
     atomic_local_memory = "  __local atomic_uint wg_test_locations[3584];"
@@ -180,7 +189,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
             test_type_code = self.inter_workgroup_result_shader_code
         elif self.test_type == "intra_workgroup":
             test_type_code = self.intra_workgroup_result_shader_code
-        return self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
+        return self.test_result_struct + self.result_shader_common_code + test_type_code + result_code + self.result_shader_common_footer
 
     def read_repr(self, instr, i):
         if self.memory_type == "atomic_workgroup":
@@ -257,7 +266,7 @@ static void do_stress(__global uint* scratchpad, __global uint* scratch_location
             else:
                 template = "}} else if ({}) {{"
             statements.append(template.format(self.generate_post_condition(behavior.post_condition)))
-            statements.append("  atomic_fetch_add(&test_results[{}], 1);".format(i))
+            statements.append("  atomic_fetch_add(&test_results->{}, 1);".format(behavior.key))
             if i == len(self.behaviors) - 1:
                 statements.append("}")
             i += 1
