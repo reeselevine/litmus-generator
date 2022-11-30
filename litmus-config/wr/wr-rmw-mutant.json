@@ -34,7 +34,7 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 1
+          "value": 0
         },
         {
           "type": "memory",
@@ -50,46 +50,17 @@
         {
           "type": "variable",
           "id": "r0",
-          "value": 1
-        },
-        {
-          "type": "memory",
-          "id": "x",
-          "value": 1
-        }
-      ]
-    },
-    "interleaved": {
-      "type": "op",
-      "op": "and",
-      "conditions": [
-        {
-          "type": "variable",
-          "id": "r0",
           "value": 2
         },
         {
           "type": "memory",
           "id": "x",
-          "value": 2
+          "value": 1
         }
       ]
     },
     "weak": {
-      "type": "op",
-      "op": "and",
-      "conditions": [
-        {
-          "type": "variable",
-          "id": "r0",
-          "value": 2
-        },
-        {
-          "type": "memory",
-          "id": "x",
-          "value": 1
-        }
-      ]
+      "type": "else"
     }
   }
 }

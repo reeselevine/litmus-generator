@@ -61,7 +61,7 @@
         }
       ]
     } ,
-    "nonWeak": {
+    "seq0": {
       "type": "else"
     }
   }
