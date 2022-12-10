@@ -2,6 +2,7 @@
 !minimally-forbidden-variants
 *.csv
 __pycache__
+.vscode/
 target/
 results/
 build/

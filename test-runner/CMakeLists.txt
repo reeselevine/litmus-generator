@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(TestRunner)
 
 # Find Vulkan
-find_package(Vulkan REQUIRED FATAL_ERROR)
+find_package(Vulkan REQUIRED)
 
 # Set up external libraries
 add_subdirectory(lib/easyvk)
