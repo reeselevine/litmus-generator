@@ -161,14 +161,14 @@ class LitmusTest:
                 seen_ids.add(condition.identifier)
                 if condition.output_type == "variable":
                     variable = condition.identifier
-                    result.append(self.store_read_result_repr(variable, self.read_threads[variable]))
+                    result = [self.store_read_result_repr(variable, self.read_threads[variable])]
                 elif condition.output_type == "memory" and "workgroup" in self.memory_type:
-                    result.append(self.store_workgroup_mem_repr(condition.identifier))
+                    result = [self.store_workgroup_mem_repr(condition.identifier)]
                     needs_mem = True
         elif isinstance(condition, self.PostConditionNode):
             for cond in condition.conditions:
                 (_needs_mem, _result) = self.generate_post_condition_stores(cond, seen_ids)
-                result += _result
+                result = _result + result
                 if not needs_mem:
                     needs_mem = _needs_mem
         return (needs_mem, result)
