@@ -1,0 +1,1 @@
+rr shaders/rr-mem-device-scope-device.spv shaders/rr-results.spv shaders/rr-mem-device-params.txt

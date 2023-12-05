@@ -1,5 +1,0 @@
-numOutputs=3
-numResults=9
-permuteLocation=1
-workgroupMemory=1
-checkMemory=0

@@ -43,25 +43,14 @@ function random_config() {
 }
 
 function run_test() {
-  local test=$1
-  local test_mem=$2
-  local test_scope=$3
-  res=$(./runner -n $test -s $test-$test_mem-$test_scope.spv -r $test-results.spv -p $PARAM_FILE -t $test-$test_mem-params.txt -d $device_idx)
+  local test_name=$1
+  local test_shader=$2
+  local test_result_shader=$3
+  local test_params=$4
+  res=$(./runner -n $test_name -s $test_shader -r $test_result_shader -p $PARAM_FILE -t $test_params -d $device_idx)
   local device_used=$(echo "$res" | head -n 1 | sed 's/.*Using device \(.*\)$/\1/')
-  local num_violations=$(echo "$res" | tail -n 1 | sed 's/.*of violations: \(.*\)$/\1/')
-  echo "  Test $test-$test_mem-$test_scope violations: $num_violations"
-
-  if [ $num_violations -gt 0 ] ; then
-    if [ ! -d "$RESULT_DIR/$device_used" ] ; then
-      mkdir "$RESULT_DIR/$device_used"
-    fi
-    if [ ! -d "$RESULT_DIR/$device_used/$iter-$test_mem" ] ; then
-      mkdir "$RESULT_DIR/$device_used/$iter-$test_mem"
-      cp $PARAM_FILE "$RESULT_DIR/$device_used/$iter-$test_mem"
-    fi
-    echo "Test: $test-$test_mem-$test_scope violations: $num_violations" >> "$RESULT_DIR/$device_used/$iter-$test_mem/violations.txt"
-  fi
-
+  local weak_behaviors=$(echo "$res" | tail -n 1 | sed 's/.*of weak behaviors: \(.*\)$/\1/')
+  echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors"
 }
 
 if [ $# != 1 ] ; then
@@ -75,25 +64,18 @@ if [ ! -d "$RESULT_DIR" ] ; then
   mkdir $RESULT_DIR
 fi
 
-test_names=("rr" "rw" "wr")
+readarray tests < shaders.txt
+
 iter=0
 
 while [ true ]
 do
   echo "Iteration: $iter"
-
-  # device memory tests
   random_config 1024 256
-  for test in "${test_names[@]}"; do
-    run_test "$test" "mem-device" "scope-device"
-    run_test "$test" "mem-device" "scope-wg"
+  for test in "${tests[@]}"; do
+    test_info=(${test})
+    echo $test_info
+    run_test "${test_info[0]}" "${test_info[1]}" "${test_info[2]}" "${test_info[3]}"
   done
-
-  # workgroup memory tests
-  random_config 16 128 
-  for test in "${test_names[@]}"; do
-    run_test "$test" "mem-wg" "scope-wg"
-  done
-
   iter=$((iter + 1))
 done

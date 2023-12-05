@@ -6,3 +6,6 @@ __pycache__
 target/
 results/
 build/
+easyvk.o
+runner
+params.txt
