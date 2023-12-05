@@ -1,7 +1,6 @@
 #!/bin/bash
 
 PARAM_FILE="params.txt"
-RESULT_DIR="results"
 
 # Generate a random number between min and max
 function random_between() {
@@ -59,10 +58,6 @@ if [ $# != 1 ] ; then
 fi
 
 device_idx=$1
-
-if [ ! -d "$RESULT_DIR" ] ; then
-  mkdir $RESULT_DIR
-fi
 
 readarray tests < shaders.txt
 

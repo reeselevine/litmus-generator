@@ -225,10 +225,6 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     }
     weakBehaviors += check_results(results, test_name);
 
-//    for (int i = 0; i < testingThreads; i++) {
-//      cout << "i: " << i <<  " flag: " << readResults.load<uint32_t>(i*2) << " r0: " << readResults.load<uint32_t>(i*2 + 1) << " mem: " << buffers[0].load<uint32_t>(i*stress_params["memStride"]) << "\n";
-//    }
-
     program.teardown();
     resultProgram.teardown();
   }
