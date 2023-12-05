@@ -1,3 +1,6 @@
 [submodule "test-runner/lib/easyvk"]
 	path = test-runner/lib/easyvk
 	url = git@github.com:reeselevine/easyvk.git
+[submodule "test-runner/easyvk"]
+	path = test-runner/easyvk
+	url = git@github.com:ucsc-chpl/easyvk.git

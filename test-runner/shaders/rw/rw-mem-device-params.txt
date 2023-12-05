@@ -1,0 +1,5 @@
+numOutputs=2
+numResults=9
+permuteLocation=1
+workgroupMemory=0
+checkMemory=1
