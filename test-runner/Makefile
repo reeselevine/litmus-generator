@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17
 
-.PHONY: clean easyvk 
+.PHONY: clean easyvk runner
 
 all: easyvk runner
 
