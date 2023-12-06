@@ -123,6 +123,11 @@ void setStaticStressParams(Buffer &stressParams, map<string, int> stress_params,
   stressParams.store<uint32_t>(8, test_params["permuteLocation"]);
   stressParams.store<uint32_t>(9, stress_params["testingWorkgroups"]);
   stressParams.store<uint32_t>(10, stress_params["memStride"]);
+  if (test_params["aliasedMemory"] == 1) {
+    stressParams.store(11, 0);
+  } else {
+    stressParams.store(11, params["memStride"]);
+  }
 }
 
 /** Returns a value between the min and max. */
@@ -142,20 +147,17 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   auto instance = Instance(enable_validation_layers);
   auto device = getDevice(instance, device_id);
   int testingThreads = stress_params["workgroupSize"] * stress_params["testingWorkgroups"];
-  int testLocSize = testingThreads * stress_params["memStride"];
+  int testLocSize = testingThreads * test_params["numMemLocations"] * stress_params["memStride"];
 
   // set up buffers
   vector<Buffer> buffers;
   vector<Buffer> resultBuffers;
-  if (!test_params["workgroupMemory"] == 1 || test_params["checkMemory"] == 1) { // test shader needs a non atomic buffer for device buffers, or if we need to save workgroup memory
-    auto nonAtomicTestLocations = Buffer(device, testLocSize, sizeof(uint32_t));
-    buffers.push_back(nonAtomicTestLocations);
+  if (!test_params["workgroupMemory"] == 1 || test_params["checkMemory"] == 1) { // test shader needs a test locations buffer for device memory tests, or if we need to save workgroup memory
+    auto testLocations = Buffer(device, testLocSize, sizeof(uint32_t));
+    buffers.push_back(testLocations);
     if (test_params["checkMemory"] == 1) { // result shader only needs these locations if we need to check memory
-      resultBuffers.push_back(nonAtomicTestLocations);
+      resultBuffers.push_back(testLocations);
     }
-  }
-  if (!test_params["workgroupMemory"] == 1) { // test shader needs an atomic buffer only if it's not workgroup memory
-    buffers.push_back(Buffer(device, testLocSize, sizeof(uint32_t))); // atomic test locations
   }
 
   auto readResults = Buffer(device, test_params["numOutputs"] * testingThreads, sizeof(uint32_t));
@@ -189,10 +191,7 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
 
     int numWorkgroups = setBetween(stress_params["testingWorkgroups"], stress_params["maxWorkgroups"]);
     if (!test_params["workgroupMemory"] == 1 || test_params["checkMemory"] == 1) {
-      clearMemory(buffers[0], testLocSize); // non-atomic test locations will be the first buffer
-    }
-    if (!test_params["workgroupMemory"] == 1) {
-      clearMemory(buffers[1], testLocSize); // atomic test locations will be the second buffer
+      clearMemory(buffers[0], testLocSize); // test locations will be the first buffer
     }
     clearMemory(testResults, test_params["numResults"]);
     clearMemory(barrier, 1);
@@ -344,10 +343,6 @@ int main(int argc, char *argv[])
   srand(time(NULL));
   map<string, int> stressParams = read_config(stressParamsFile);
   map<string, int> testParams = read_config(testParamsFile);
-//  for (const auto& [key, value] : stressParams) {
-//    std::cout << key << " = " << value << "; ";
-//  }
-//  std::cout << "\n";
   run(testName, shaderFile, resultShaderFile, stressParams, testParams, deviceIndex, enableValidationLayers);
   return 0;
 }
