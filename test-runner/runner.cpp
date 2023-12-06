@@ -126,7 +126,7 @@ void setStaticStressParams(Buffer &stressParams, map<string, int> stress_params,
   if (test_params["aliasedMemory"] == 1) {
     stressParams.store(11, 0);
   } else {
-    stressParams.store(11, params["memStride"]);
+    stressParams.store(11, stress_params["memStride"]);
   }
 }
 
