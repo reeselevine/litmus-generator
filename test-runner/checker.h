@@ -10,7 +10,7 @@ int check_mp(vector<uint32_t> results) {
 
 int check_results(vector<uint32_t> results, string test_name) {
   if (test_name == "mp") {
-    return check_rr(results);
+    return check_mp(results);
   }
   return -1;
 }

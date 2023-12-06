@@ -152,14 +152,12 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   // set up buffers
   vector<Buffer> buffers;
   vector<Buffer> resultBuffers;
+  auto testLocations = Buffer(device, testLocSize, sizeof(uint32_t));
   if (!test_params["workgroupMemory"] == 1 || test_params["checkMemory"] == 1) { // test shader needs a test locations buffer for device memory tests, or if we need to save workgroup memory
-    auto testLocations = Buffer(device, testLocSize, sizeof(uint32_t));
     buffers.push_back(testLocations);
-    if (test_params["checkMemory"] == 1) { // result shader only needs these locations if we need to check memory
-      resultBuffers.push_back(testLocations);
-    }
   }
-
+  resultBuffers.push_back(testLocations);
+ 
   auto readResults = Buffer(device, test_params["numOutputs"] * testingThreads, sizeof(uint32_t));
   buffers.push_back(readResults);
   resultBuffers.push_back(readResults);
@@ -175,23 +173,23 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   buffers.push_back(scratchpad);
   auto scratchLocations = Buffer(device, stress_params["maxWorkgroups"], sizeof(uint32_t));
   buffers.push_back(scratchLocations);
-  auto stressParams = Buffer(device, 11, sizeof(uint32_t));
+  auto stressParams = Buffer(device, 12, sizeof(uint32_t));
   setStaticStressParams(stressParams, stress_params, test_params);
   buffers.push_back(stressParams);
   resultBuffers.push_back(stressParams);
-
 
   // run iterations
   chrono::time_point<std::chrono::system_clock> start, end;
   start = chrono::system_clock::now();
   int weakBehaviors = 0;
+
   for (int i = 0; i < stress_params["testIterations"]; i++) {
     auto program = Program(device, shader_file.c_str(), buffers);
     auto resultProgram = Program(device, result_shader_file.c_str(), resultBuffers);
 
     int numWorkgroups = setBetween(stress_params["testingWorkgroups"], stress_params["maxWorkgroups"]);
     if (!test_params["workgroupMemory"] == 1 || test_params["checkMemory"] == 1) {
-      clearMemory(buffers[0], testLocSize); // test locations will be the first buffer
+      clearMemory(testLocations, testLocSize); // test locations will be the first buffer
     }
     clearMemory(testResults, test_params["numResults"]);
     clearMemory(barrier, 1);
@@ -211,11 +209,10 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
       program.setWorkgroupMemoryLength(testLocSize*sizeof(uint32_t), 1);
     }
 
-    program.initialize("run_test");
+    program.initialize("litmus_test");
     program.run();
-    resultProgram.initialize("check_results");
+    resultProgram.initialize("litmus_test");
     resultProgram.run();
-
 
     cout << "Iteration " << i << "\n";
     vector<uint32_t> results;
