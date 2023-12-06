@@ -1,4 +1,5 @@
 *-variants
+vk-output.txt
 !minimally-forbidden-variants
 *.csv
 __pycache__
