@@ -1,7 +1,7 @@
 testIterations=10
 testingWorkgroups=988
 maxWorkgroups=995
-workgroupSize=107
+workgroupSize=128
 shufflePct=0
 barrierPct=68
 stressLineSize=16
