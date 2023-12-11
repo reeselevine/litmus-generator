@@ -182,6 +182,8 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   chrono::time_point<std::chrono::system_clock> start, end;
   start = chrono::system_clock::now();
   int weakBehaviors = 0;
+  
+  float testTime = 0;
 
   for (int i = 0; i < stress_params["testIterations"]; i++) {
     auto program = Program(device, shader_file.c_str(), buffers);
@@ -210,7 +212,7 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     }
 
     program.initialize("litmus_test");
-    program.run();
+    testTime += program.runWithDispatchTiming();
     resultProgram.initialize("litmus_test");
     resultProgram.run();
 
@@ -221,11 +223,13 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     }
     weakBehaviors += check_results(results, test_name);
 
+
     program.teardown();
     resultProgram.teardown();
   }
 
   cout << "Number of weak behaviors: " << weakBehaviors << "\n";
+  cout << "Total test shader time: " << testTime/1000000 << " ms\n";
 
   for (Buffer buffer : buffers) {
     buffer.teardown();
