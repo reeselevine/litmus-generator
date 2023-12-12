@@ -60,14 +60,15 @@ function run_test() {
   echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors"
 }
 
-if [ $# != 1 ] ; then
-  echo "Need to pass device index as first argument"
+if [ $# != 2 ] ; then
+  echo "Need to pass device index as first argument, file with lists of tests as second"
   exit 1
 fi
 
 device_idx=$1
+test_file=$2
 
-readarray tests < shaders.txt
+readarray tests < $test_file
 
 iter=0
 
