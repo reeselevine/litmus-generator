@@ -1,0 +1,2 @@
+2+2w shaders/2+2-write.spv shaders/2+2-write-results.spv shaders/2+2-write-mem-device-params.txt
+2+2w shaders/2+2-write-rel.spv shaders/2+2-write-results.spv shaders/2+2-write-mem-device-params.txt
