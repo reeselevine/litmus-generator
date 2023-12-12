@@ -182,6 +182,7 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   chrono::time_point<std::chrono::system_clock> start, end;
   start = chrono::system_clock::now();
   int weakBehaviors = 0;
+  int totalBehaviors = 0;
   
   float testTime = 0;
 
@@ -220,6 +221,7 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     vector<uint32_t> results;
     for (int i = 0; i < test_params["numResults"]; i++) {
       results.push_back(testResults.load<uint32_t>(i));
+      totalBehaviors += testResults.load<uint32_t>(i);
     }
     weakBehaviors += check_results(results, test_name);
 
@@ -229,6 +231,7 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
   }
 
   cout << "Number of weak behaviors: " << weakBehaviors << "\n";
+  cout << "Percentage of weak behaviors: " << float(weakBehaviors)/float(totalBehaviors) * 100 << "%\n";
   cout << "Total test shader time: " << testTime/1000000 << " ms\n";
 
   for (Buffer buffer : buffers) {
