@@ -24,6 +24,13 @@ int check_sb(vector<uint32_t> results) {
   return results[3];
 }
 
+int check_22w(vector<uint32_t> results) {
+  cout << "x=1, y=2 (seq): " << results[0] << "\n";
+  cout << "x=2, y=1 (seq): " << results[1] << "\n";
+  cout << "x=1, y=1 (interleaved): " << results[2] << "\n";
+  cout << "x=2, y=2 (weak): " << results[3] << "\n";
+  return results[3];
+}
 int check_iriw(vector<uint32_t> results) {
   cout << "r0=0, r1=0, r2=0, r3=0 (seq): " << results[0] << "\n";
   cout << "r0=1, r1=1, r2=1, r3=1 (seq): " << results[1] << "\n";
@@ -47,6 +54,8 @@ int check_results(vector<uint32_t> results, string test_name) {
     return check_sb(results);
   } else if (test_name == "iriw") {
     return check_iriw(results);
+  } else if (test_name == "2+2w") {
+    return check_22w(results);
   }
   return -1;
 }
