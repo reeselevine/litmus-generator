@@ -229,10 +229,10 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     program.teardown();
     resultProgram.teardown();
   }
-
-  cout << "Number of weak behaviors: " << weakBehaviors << "\n";
-  cout << "Percentage of weak behaviors: " << float(weakBehaviors)/float(totalBehaviors) * 100 << "%\n";
+  
   cout << "Total test shader time: " << testTime/1000000 << " ms\n";
+  cout << "Weak behavior percentage: " << float(weakBehaviors)/float(totalBehaviors) * 100 << "%\n";
+  cout << "Number of weak behaviors: " << weakBehaviors << "\n";
 
   for (Buffer buffer : buffers) {
     buffer.teardown();

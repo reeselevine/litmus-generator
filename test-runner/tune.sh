@@ -2,6 +2,14 @@
 
 PARAM_FILE="params.txt"
 
+function make_even() {
+    if (( $1 % 2 == 0 )); then
+        echo "$1"
+    else
+	echo "$(($1 + 1))"
+    fi
+}
+
 # Generate a random number between min and max
 function random_between() {
   local min=$1
@@ -21,7 +29,7 @@ function random_config() {
   echo "testingWorkgroups=$testingWorkgroups" >> $PARAM_FILE
   local maxWorkgroups=$(random_between $testingWorkgroups $workgroupLimiter)
   echo "maxWorkgroups=$maxWorkgroups" >> $PARAM_FILE
-  local workgroupSize=$(random_between 1 $workgroupSizeLimiter)
+  local workgroupSize=$(make_even $(random_between 1 $workgroupSizeLimiter))
   echo "workgroupSize=$workgroupSize" >> $PARAM_FILE
   echo "shufflePct=$(random_between 0 100)" >> $PARAM_FILE
   echo "barrierPct=$(random_between 0 100)" >> $PARAM_FILE
@@ -69,7 +77,6 @@ do
   random_config 1024 256
   for test in "${tests[@]}"; do
     test_info=(${test})
-    echo $test_info
     run_test "${test_info[0]}" "${test_info[1]}" "${test_info[2]}" "${test_info[3]}"
   done
   iter=$((iter + 1))
