@@ -1,2 +1,3 @@
 iriw shaders/iriw.spv shaders/iriw-results.spv shaders/iriw-mem-device-params.txt
 iriw shaders/iriw-acq-rel.spv shaders/iriw-results.spv shaders/iriw-mem-device-params.txt
+iriw shaders/iriw-acq.spv shaders/iriw-results.spv shaders/iriw-mem-device-params.txt

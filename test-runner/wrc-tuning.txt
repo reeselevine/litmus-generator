@@ -1,0 +1,2 @@
+wrc shaders/wrc.spv shaders/wrc-results.spv shaders/wrc-mem-device-params.txt
+wrc shaders/wrc-acq.spv shaders/wrc-results.spv shaders/wrc-mem-device-params.txt
