@@ -57,7 +57,9 @@ function run_test() {
   res=$(./runner -n $test_name -s $test_shader -r $test_result_shader -p $PARAM_FILE -t $test_params -d $device_idx)
   local device_used=$(echo "$res" | head -n 1 | sed 's/.*Using device \(.*\)$/\1/')
   local weak_behaviors=$(echo "$res" | tail -n 1 | sed 's/.*of weak behaviors: \(.*\)$/\1/')
-  echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors"
+  local weak_pct=$(echo "$res" | tail -n 2 | head -n 1| sed 's/.*percentage: \(.*\)$/\1/')
+
+  echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors, $weak_pct"
 }
 
 if [ $# != 2 ] ; then
