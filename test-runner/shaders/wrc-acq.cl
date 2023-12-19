@@ -61,7 +61,7 @@ __kernel void litmus_test (
     uint new_workgroup = stripe_workgroup(shuffled_workgroup, get_local_id(0), stress_params[9]);
     uint id_2 = new_workgroup * get_local_size(0) + permute_id(get_local_id(0), stress_params[7], get_local_size(0));  // read from y then x
     uint x_0 = id_0 * stress_params[10] * 2;
-    uint x_1 = id_0 * stress_params[10] * 2;
+    uint x_1 = id_1 * stress_params[10] * 2;
     uint y_1 = permute_id(id_1, stress_params[8], total_ids) * stress_params[10] * 2 + stress_params[11];
     uint x_2 = id_2 * stress_params[10] * 2;
     uint y_2 = permute_id(id_2, stress_params[8], total_ids) * stress_params[10] * 2 + stress_params[11];
