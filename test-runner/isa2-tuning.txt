@@ -1,0 +1,2 @@
+isa2 shaders/isa2.spv shaders/isa2-results.spv shaders/isa2-mem-device-params.txt
+isa2 shaders/isa2-acq.spv shaders/isa2-results.spv shaders/isa2-mem-device-params.txt

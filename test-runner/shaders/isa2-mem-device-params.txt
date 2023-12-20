@@ -1,0 +1,7 @@
+numOutputs=3
+numMemLocations=3
+numResults=7
+permuteLocation=1031
+aliasedMemory=0
+workgroupMemory=0
+checkMemory=0

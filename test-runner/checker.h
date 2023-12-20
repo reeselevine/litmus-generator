@@ -57,6 +57,17 @@ int check_wrc(vector<uint32_t> results) {
   return results[5];
 }
 
+int check_isa2(vector<uint32_t> results) {
+  cout << "r0=1, r1=1, r2=1 (seq): " << results[0] << "\n";
+  cout << "r0=0, r1=0, r2=0 (seq): " << results[1] << "\n";
+  cout << "r0=0, r1=0, r2=1 (seq): " << results[2] << "\n";
+  cout << "r0=1, r1=0, r2=0 (seq): " << results[3] << "\n";
+  cout << "r0=1, r1=0, r2=1 (interleaved): " << results[4] << "\n";
+  cout << "r0=1, r1=1, r2=0 (weak): " << results[5] << "\n";
+  cout << "other: " << results[6] << "\n";
+  return results[5];
+}
+
 int check_results(vector<uint32_t> results, string test_name) {
   if (test_name == "mp") {
     return check_mp(results);
@@ -70,6 +81,8 @@ int check_results(vector<uint32_t> results, string test_name) {
     return check_22w(results);
   } else if (test_name == "wrc") {
     return check_wrc(results);
+  } else if (test_name == "isa2") {
+    return check_isa2(results);
   }
   return -1;
 }
