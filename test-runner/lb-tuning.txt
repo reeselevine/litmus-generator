@@ -1,2 +1,2 @@
-lb shaders/load-buffer.spv shaders/load-buffer-results.spv shaders/lb-mem-device-params.txt
-lb shaders/load-buffer-cond.spv shaders/load-buffer-results.spv shaders/lb-mem-device-params.txt
+lb load-buffer load-buffer-results lb-mem-device-params.txt
+lb load-buffer-cond load-buffer-results lb-mem-device-params.txt

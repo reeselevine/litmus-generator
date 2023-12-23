@@ -1,3 +1,3 @@
-wrc shaders/wrc.spv shaders/wrc-results.spv shaders/wrc-mem-device-params.txt
-wrc shaders/wrc-acq.spv shaders/wrc-results.spv shaders/wrc-mem-device-params.txt
-wrc shaders/wrc-rel-acq.spv shaders/wrc-results.spv shaders/wrc-mem-device-params.txt
+wrc wrc wrc-results wrc-mem-device-params.txt
+wrc wrc-acq wrc-results wrc-mem-device-params.txt
+wrc wrc-rel-acq wrc-results wrc-mem-device-params.txt

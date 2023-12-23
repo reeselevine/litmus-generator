@@ -1,6 +1,8 @@
 #!/bin/bash
 
 PARAM_FILE="params.txt"
+RESULT_DIR="results"
+SHADER_DIR="shaders"
 
 function make_even() {
     if (( $1 % 2 == 0 )); then
@@ -33,7 +35,7 @@ function random_config() {
   echo "workgroupSize=$workgroupSize" >> $PARAM_FILE
   echo "shufflePct=$(random_between 0 100)" >> $PARAM_FILE
   echo "barrierPct=$(random_between 0 100)" >> $PARAM_FILE
-  local stressLineSize=$(($(random_between 2 10) ** 2))
+  local stressLineSize=$(echo "$(random_between 2 10)^2" | bc)
   echo "stressLineSize=$stressLineSize" >> $PARAM_FILE
   local stressTargetLines=$(random_between 1 16)
   echo "stressTargetLines=$stressTargetLines" >> $PARAM_FILE
@@ -54,17 +56,41 @@ function run_test() {
   local test_shader=$2
   local test_result_shader=$3
   local test_params=$4
-  res=$(./runner -n $test_name -s $test_shader -r $test_result_shader -p $PARAM_FILE -t $test_params -d $device_idx)
+  res=$(./runner -n $test_name -s $SHADER_DIR/$test_shader.spv -r $SHADER_DIR/$test_result_shader.spv -p $PARAM_FILE -t $SHADER_DIR/$test_params -d $device_idx)
   local device_used=$(echo "$res" | head -n 1 | sed 's/.*Using device \(.*\)$/\1/')
   local weak_behaviors=$(echo "$res" | tail -n 1 | sed 's/.*of weak behaviors: \(.*\)$/\1/')
-  local weak_pct=$(echo "$res" | tail -n 2 | head -n 1| sed 's/.*percentage: \(.*\)$/\1/')
+  local weak_pct=$(echo "$res" | tail -n 2 | head -n 1 | sed 's/.*percentage: \(.*\)$/\1/')
+  local weak_rate=$(echo "$res" | tail -n 3 | head -n 1 | sed 's/.*rate: \(.*\) per second/\1/')
 
-  echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors, $weak_pct"
+  echo "  Device $device_used Test $test_shader weak behaviors: $weak_behaviors, $weak_pct, rate: $weak_rate per second"
+
+  if (( $(echo "$weak_rate > 0" | bc -l) )); then
+    if [ ! -d "$RESULT_DIR/$device_used" ] ; then
+      mkdir "$RESULT_DIR/$device_used"
+    fi
+    local test_result_dir="$RESULT_DIR/$device_used/$test_shader"
+    if [ ! -d "$test_result_dir" ] ; then
+      mkdir "$test_result_dir"
+      cp $PARAM_FILE "$test_result_dir"
+      echo $weak_rate > "$test_result_dir/rate"
+    else
+      local max_rate=$(cat "$test_result_dir/rate")
+      if (( $(echo "$weak_rate > $max_rate" | bc -l) )); then
+        cp $PARAM_FILE "$test_result_dir"
+        echo $weak_rate > "$test_result_dir/rate"
+      fi
+    fi
+  fi
+
 }
 
 if [ $# != 2 ] ; then
   echo "Need to pass device index as first argument, file with lists of tests as second"
   exit 1
+fi
+
+if [ ! -d "$RESULT_DIR" ] ; then
+  mkdir $RESULT_DIR
 fi
 
 device_idx=$1
