@@ -1,3 +1,5 @@
 wrc wrc wrc-results wrc-mem-device-params.txt
+wrc wrc-data-dep wrc-results wrc-mem-device-params.txt
+wrc wrc-addr-dep wrc-results wrc-mem-device-params.txt
 wrc wrc-acq wrc-results wrc-mem-device-params.txt
 wrc wrc-rel-acq wrc-results wrc-mem-device-params.txt
