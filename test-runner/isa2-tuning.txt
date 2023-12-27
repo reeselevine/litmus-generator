@@ -1,2 +1,3 @@
 isa2 isa2 isa2-results isa2-mem-device-params.txt
+isa2 isa2-addr-dep isa2-results isa2-mem-device-params.txt
 isa2 isa2-acq isa2-results isa2-mem-device-params.txt
