@@ -1,1 +1,2 @@
 isa2 isa2-rel-data-acq isa2-results isa2-mem-device-params.txt
+isa2 isa2-rel-data-addr isa2-results isa2-mem-device-params.txt
