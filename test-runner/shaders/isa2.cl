@@ -75,6 +75,8 @@ __kernel void litmus_test (
       spin(barrier, get_local_size(0) * stress_params[9]);
     }
 
+    if (id_0 != id_1) {
+
     // Thread 0
     atomic_store_explicit(&test_locations[x_0], 1, memory_order_relaxed);
     atomic_store_explicit(&test_locations[y_0], 1, memory_order_relaxed);
@@ -90,6 +92,7 @@ __kernel void litmus_test (
     atomic_store(&read_results[id_1 * 3], r0);
     atomic_store(&read_results[id_2 * 3 + 1], r1);
     atomic_store(&read_results[id_2 * 3 + 2], r2);
+    }
   } else if (stress_params[1]) {
     do_stress(scratchpad, scratch_locations, stress_params[2], stress_params[3]);
   }
