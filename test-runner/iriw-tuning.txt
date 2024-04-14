@@ -1,3 +1,4 @@
 iriw iriw iriw-results iriw-mem-device-params.txt
 iriw iriw-acq-rel iriw-results iriw-mem-device-params.txt
 iriw iriw-acq iriw-results iriw-mem-device-params.txt
+iriw iriw-addr iriw-results iriw-mem-device-params.txt

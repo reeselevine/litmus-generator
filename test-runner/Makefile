@@ -1,5 +1,6 @@
 CXX = g++
 CXXFLAGS = -std=c++17
+CLSPVFLAGS = -cl-std=CL2.0 -inline-entry-points
 
 .PHONY: clean easyvk runner
 
@@ -15,3 +16,5 @@ easyvk: easyvk/src/easyvk.cpp easyvk/src/easyvk.h
 runner: runner.cpp 
 	$(CXX) $(CXXFLAGS) -Ieasyvk/src easyvk.o runner.cpp -lvulkan -o runner
 
+%.spv: %.cl
+	clspv -cl-std=CL2.0 -inline-entry-points $< -o $@
