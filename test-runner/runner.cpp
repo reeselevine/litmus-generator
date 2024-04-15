@@ -7,6 +7,7 @@
 #include <chrono>
 #include <easyvk.h>
 #include <unistd.h>
+#include <iomanip>
 #include "checker.h"
 
 using namespace std;
@@ -141,7 +142,7 @@ int setBetween(int min, int max) {
 }
 
 /** A test consists of N iterations of a shader and its corresponding result shader. */
-void run(string test_name, string &shader_file, string &result_shader_file, map<string, int> stress_params, map<string, int> test_params, int device_id, bool enable_validation_layers)
+void run(string test_name, string &shader_file, string &result_shader_file, map<string, int> stress_params, map<string, int> test_params, int device_id, bool enable_validation_layers, bool print_results)
 {
   // initialize settings
   auto instance = Instance(enable_validation_layers);
@@ -217,13 +218,15 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
     resultProgram.initialize("litmus_test");
     resultProgram.run();
 
-    cout << "Iteration " << i << "\n";
+    if (print_results) {
+      cout << "Iteration " << i << "\n";
+    }
     vector<uint32_t> results;
     for (int i = 0; i < test_params["numResults"]; i++) {
       results.push_back(testResults.load<uint32_t>(i));
       totalBehaviors += testResults.load<uint32_t>(i);
     }
-    weakBehaviors += check_results(results, test_name);
+    weakBehaviors += check_results(results, test_name, print_results);
 
 
     program.teardown();
@@ -232,9 +235,11 @@ void run(string test_name, string &shader_file, string &result_shader_file, map<
 
   
   float testTimeMs = testTime/1000000;
-  
+  end = chrono::high_resolution_clock::now();
+  chrono::duration<double> duration = end - start;
+  cout << "Time taken: " << duration.count() << " seconds" << std::endl;  
   cout << "Total test shader time: " << testTimeMs << " ms\n";
-  cout << "Weak behavior rate: " << float(weakBehaviors)/(testTimeMs/1000) << " per second\n";
+  cout << fixed << setprecision(0) << "Weak behavior rate: " << float(weakBehaviors)/(testTimeMs/1000) << " per second\n";
   cout << "Weak behavior percentage: " << float(weakBehaviors)/float(totalBehaviors) * 100 << "%\n";
   cout << "Number of weak behaviors: " << weakBehaviors << "\n";
 
@@ -279,9 +284,10 @@ int main(int argc, char *argv[])
   int deviceIndex = 0;
   bool enableValidationLayers = false;
   bool list_devices = false;
+  bool print_results = false;
 
   int c;
-  while ((c = getopt(argc, argv, "vcls:r:p:t:d:n:")) != -1)
+  while ((c = getopt(argc, argv, "vclxs:r:p:t:d:n:")) != -1)
     switch (c)
     {
     case 'n':
@@ -301,6 +307,9 @@ int main(int argc, char *argv[])
       break;
     case 'v':
       enableValidationLayers = true;
+      break;
+    case 'x':
+      print_results = true;
       break;
     case 'l':
       list_devices = true;
@@ -351,6 +360,6 @@ int main(int argc, char *argv[])
   srand(time(NULL));
   map<string, int> stressParams = read_config(stressParamsFile);
   map<string, int> testParams = read_config(testParamsFile);
-  run(testName, shaderFile, resultShaderFile, stressParams, testParams, deviceIndex, enableValidationLayers);
+  run(testName, shaderFile, resultShaderFile, stressParams, testParams, deviceIndex, enableValidationLayers, print_results);
   return 0;
 }
